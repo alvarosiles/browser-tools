@@ -19,8 +19,12 @@ export default function PrinterTools({ onNotify }) {
 
   const handleTestPage = async () => {
     try {
-      await printTestPage(printerName)
-      onNotify(`Página de prueba enviada a "${printerName}".`)
+      const { result } = await printTestPage(printerName)
+      onNotify(
+        result?.outputFile
+          ? `Página de prueba generada en ${result.outputFile}`
+          : `Página de prueba enviada a "${printerName}".`
+      )
     } catch (err) {
       onNotify(err.message)
     }

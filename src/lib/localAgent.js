@@ -26,6 +26,10 @@ export function clearBrowserHistory(browserId) {
   return requestLocalAction('clear-browser-history', { browserId })
 }
 
+export function clearBrowserCache(browserId) {
+  return requestLocalAction('clear-browser-cache', { browserId })
+}
+
 export function openControlPanel() {
   return requestLocalAction('open-control-panel')
 }
