@@ -1,11 +1,18 @@
 import express from 'express'
 import cors from 'cors'
+import crypto from 'node:crypto'
 import {
   clearBrowserData,
   openControlPanel,
   openWindowsSettings,
   openPrinterMaintenance,
   printTestPage,
+  detectInstalledBrowsers,
+  backupBrowserProfile,
+  backupBrowserBookmarks,
+  openPasswordManager,
+  backupAll,
+  openBackupFolder,
 } from './commands.js'
 
 const PORT = process.env.PORT || 5177
@@ -31,6 +38,55 @@ handle('open-control-panel', () => openControlPanel())
 handle('open-windows-settings', () => openWindowsSettings())
 handle('open-printer-maintenance', ({ printerName }) => openPrinterMaintenance(printerName))
 handle('print-test-page', ({ printerName }) => printTestPage(printerName))
+handle('backup-browser-profile', ({ browserId }) => backupBrowserProfile(browserId))
+handle('backup-browser-bookmarks', ({ browserId }) => backupBrowserBookmarks(browserId))
+handle('open-password-manager', ({ browserId }) => openPasswordManager(browserId))
+handle('open-backup-folder', ({ date }) => openBackupFolder(date))
+
+app.get('/installed-browsers', async (_req, res) => {
+  try {
+    const result = await detectInstalledBrowsers()
+    res.json({ ok: true, result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// "Respaldar Todo" tarda varios segundos por navegador (robocopy de perfiles completos),
+// así que se ejecuta como job en segundo plano: la petición inicial devuelve un jobId de
+// inmediato y el frontend consulta /backup-status/:jobId periódicamente para actualizar
+// la barra de progreso, en vez de mantener una única petición HTTP abierta minutos.
+const backupJobs = new Map()
+
+app.post('/backup-all', (_req, res) => {
+  const jobId = crypto.randomUUID()
+  const job = { status: 'running', steps: [], destRoot: null, error: null }
+  backupJobs.set(jobId, job)
+
+  backupAll((steps) => {
+    job.steps = steps
+  })
+    .then(({ destRoot, results }) => {
+      job.status = 'done'
+      job.destRoot = destRoot
+      job.steps = results
+    })
+    .catch((err) => {
+      job.status = 'error'
+      job.error = err.message
+    })
+
+  res.json({ ok: true, jobId })
+})
+
+app.get('/backup-status/:jobId', (req, res) => {
+  const job = backupJobs.get(req.params.jobId)
+  if (!job) {
+    res.status(404).json({ ok: false, error: 'Job no encontrado' })
+    return
+  }
+  res.json({ ok: true, ...job })
+})
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 

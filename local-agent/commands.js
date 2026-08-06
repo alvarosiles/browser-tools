@@ -327,3 +327,255 @@ if (-not $printer) {
   }
   throw new Error(`Respuesta inesperada del servicio: "${trimmed}"`)
 }
+
+// ---------------------------------------------------------------------------
+// Respaldo de navegadores
+// ---------------------------------------------------------------------------
+
+const BACKUP_ROOT = 'C:\\ITSupport\\Backups'
+
+const BROWSER_LABELS = {
+  chrome: 'Chrome',
+  edge: 'Edge',
+  firefox: 'Firefox',
+  brave: 'Brave',
+  opera: 'Opera',
+}
+
+const ALL_BROWSER_IDS = ['chrome', 'edge', 'firefox', 'brave', 'opera']
+
+function todayFolderName() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+export async function isBrowserInstalled(browserId) {
+  if (browserId === 'firefox') {
+    const names = await findFirefoxProfileNames()
+    return names.length > 0
+  }
+  const dir = USER_DATA_DIRS[browserId]
+  if (!dir) return false
+  return Boolean(await existingPath(dir))
+}
+
+export async function detectInstalledBrowsers() {
+  const entries = await Promise.all(
+    ALL_BROWSER_IDS.map(async (id) => [id, await isBrowserInstalled(id)])
+  )
+  return Object.fromEntries(entries)
+}
+
+// robocopy usa códigos de salida en forma de bitmap: 0-7 son distintos grados de éxito
+// (archivos copiados, algunos ya iguales, etc.), solo 8+ indica un fallo real.
+function runRobocopy(src, dest, excludeDirs = []) {
+  const excludeArgs = excludeDirs.length
+    ? `/XD ${excludeDirs.map((d) => `"${d}"`).join(' ')}`
+    : ''
+  const cmd = `robocopy "${src}" "${dest}" /E /R:1 /W:1 /NFL /NDL /NJH /NJS ${excludeArgs}`
+  return execAsync(cmd, { windowsHide: true }).catch((err) => {
+    if (typeof err.code === 'number' && err.code < 8) return { stdout: err.stdout, stderr: err.stderr }
+    throw new Error(`robocopy falló (código ${err.code}): ${err.stderr || err.message}`)
+  })
+}
+
+async function getDirSize(dir) {
+  let total = 0
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      total += await getDirSize(full)
+    } else {
+      total += await fs.stat(full).then((s) => s.size).catch(() => 0)
+    }
+  }
+  return total
+}
+
+// Carpetas pesadas/regenerables que no aportan valor a un respaldo de soporte técnico
+// (caché de recursos, shaders, métricas, binarios de extensiones ya instalados, etc.).
+const BACKUP_EXCLUDE_DIRS = [
+  'Cache',
+  'Code Cache',
+  'GPUCache',
+  'GrShaderCache',
+  'ShaderCache',
+  'Service Worker',
+  'Crashpad',
+  'CrashpadMetrics-active.pma',
+  'BrowserMetrics',
+  'component_crx_cache',
+  'extensions_crx_cache',
+  'GraphiteDawnCache',
+  'Media Cache',
+  'DawnCache',
+  'startupCache',
+  'thumbnails',
+]
+
+export async function backupBrowserProfile(browserId) {
+  if (!ALL_BROWSER_IDS.includes(browserId)) throw new Error(`Navegador no soportado: ${browserId}`)
+  if (!(await isBrowserInstalled(browserId))) {
+    throw new Error(`${BROWSER_LABELS[browserId]} no está instalado en este equipo.`)
+  }
+
+  await closeBrowser(browserId)
+
+  const destDir = path.join(BACKUP_ROOT, todayFolderName(), BROWSER_LABELS[browserId])
+  await fs.mkdir(destDir, { recursive: true })
+
+  if (browserId === 'firefox') {
+    const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+    const profileNames = await findFirefoxProfileNames()
+    for (const name of profileNames) {
+      await runRobocopy(path.join(roamingProfilesDir, name), path.join(destDir, name), [
+        'cache2',
+        'startupCache',
+        'thumbnails',
+      ])
+    }
+  } else {
+    await runRobocopy(USER_DATA_DIRS[browserId], destDir, BACKUP_EXCLUDE_DIRS)
+  }
+
+  const sizeBytes = await getDirSize(destDir)
+  return { browserId, destDir, sizeBytes }
+}
+
+// A diferencia de "Respaldar Perfil", esto solo copia el archivo de favoritos y no
+// requiere cerrar el navegador: es una copia rápida de un único archivo pequeño.
+const BOOKMARKS_FILE = { chrome: 'Bookmarks', edge: 'Bookmarks', brave: 'Bookmarks', opera: 'Bookmarks' }
+
+export async function backupBrowserBookmarks(browserId) {
+  if (!ALL_BROWSER_IDS.includes(browserId)) throw new Error(`Navegador no soportado: ${browserId}`)
+  if (!(await isBrowserInstalled(browserId))) {
+    throw new Error(`${BROWSER_LABELS[browserId]} no está instalado en este equipo.`)
+  }
+
+  const destDir = path.join(BACKUP_ROOT, todayFolderName(), BROWSER_LABELS[browserId])
+  await fs.mkdir(destDir, { recursive: true })
+
+  const savedFiles = []
+
+  if (browserId === 'firefox') {
+    const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+    const profileNames = await findFirefoxProfileNames()
+    for (const name of profileNames) {
+      const src = await existingPath(path.join(roamingProfilesDir, name, 'places.sqlite'))
+      if (!src) continue
+      const dest = path.join(destDir, `${name}-places.sqlite`)
+      await fs.copyFile(src, dest)
+      savedFiles.push(dest)
+    }
+  } else {
+    const profileDirs = await findChromiumProfileDirs(browserId)
+    for (const dir of profileDirs) {
+      const src = await existingPath(path.join(dir, BOOKMARKS_FILE[browserId]))
+      if (!src) continue
+      const profileName = path.basename(dir)
+      const dest = path.join(destDir, `${profileName}-Bookmarks.json`)
+      await fs.copyFile(src, dest)
+      savedFiles.push(dest)
+    }
+  }
+
+  if (savedFiles.length === 0) {
+    throw new Error(`No se encontraron favoritos para ${BROWSER_LABELS[browserId]}.`)
+  }
+
+  return { browserId, savedFiles }
+}
+
+// Nombres de ejecutable registrados en "App Paths" del registro de Windows — la forma
+// estándar de localizar el binario real de una app instalada sin asumir una ruta fija
+// (varía entre instalación por usuario, por máquina, x86/x64, versión, etc.).
+const APP_PATH_EXE = {
+  chrome: 'chrome.exe',
+  edge: 'msedge.exe',
+  firefox: 'firefox.exe',
+  brave: 'brave.exe',
+  opera: 'opera.exe',
+}
+
+const PASSWORD_MANAGER_URLS = {
+  chrome: 'chrome://password-manager/passwords',
+  edge: 'edge://settings/passwords',
+  brave: 'brave://settings/passwords',
+  opera: 'opera://settings/passwords',
+  firefox: 'about:logins',
+}
+
+async function findBrowserExecutable(browserId) {
+  const exeName = APP_PATH_EXE[browserId]
+  const script = `
+foreach ($hive in @('HKCU:', 'HKLM:', 'HKLM:\\SOFTWARE\\WOW6432Node')) {
+  $regPath = Join-Path $hive "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${exeName}"
+  $item = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+  if ($item -and $item.'(default)') {
+    Write-Output $item.'(default)'
+    exit
+  }
+}
+Write-Output ""
+`
+  const { stdout } = await runPowerShell(script)
+  const found = stdout.trim()
+  return found || null
+}
+
+export async function openPasswordManager(browserId) {
+  if (!ALL_BROWSER_IDS.includes(browserId)) throw new Error(`Navegador no soportado: ${browserId}`)
+  if (!(await isBrowserInstalled(browserId))) {
+    throw new Error(`${BROWSER_LABELS[browserId]} no está instalado en este equipo.`)
+  }
+
+  const exePath = await findBrowserExecutable(browserId)
+  if (!exePath) {
+    throw new Error(`No se encontró el ejecutable de ${BROWSER_LABELS[browserId]}.`)
+  }
+
+  await run(`start "" "${exePath}" "${PASSWORD_MANAGER_URLS[browserId]}"`)
+  return {
+    browserId,
+    notice:
+      'Por seguridad, el navegador solicitará la contraseña de Windows antes de exportar las contraseñas.',
+  }
+}
+
+export async function backupAll(onProgress) {
+  const installed = await detectInstalledBrowsers()
+  const destRoot = path.join(BACKUP_ROOT, todayFolderName())
+  const results = []
+
+  for (const browserId of ALL_BROWSER_IDS) {
+    if (!installed[browserId]) {
+      results.push({ browserId, label: BROWSER_LABELS[browserId], status: 'skipped' })
+      onProgress?.(results.slice())
+      continue
+    }
+    try {
+      const { destDir, sizeBytes } = await backupBrowserProfile(browserId)
+      results.push({
+        browserId,
+        label: BROWSER_LABELS[browserId],
+        status: 'success',
+        destDir,
+        sizeBytes,
+      })
+    } catch (err) {
+      results.push({ browserId, label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+    }
+    onProgress?.(results.slice())
+  }
+
+  return { destRoot, results, finishedAt: new Date().toISOString() }
+}
+
+export async function openBackupFolder(date) {
+  const dir = path.join(BACKUP_ROOT, date || todayFolderName())
+  await fs.mkdir(dir, { recursive: true })
+  await run(`start "" explorer "${dir}"`)
+  return { dir }
+}
