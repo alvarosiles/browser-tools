@@ -23,7 +23,7 @@ Debe quedar corriendo en segundo plano mientras usas el panel web (`http://local
 
 | Método | Ruta | Body | Acción |
 |---|---|---|---|
-| POST | `/clear-browser-history` | `{ browserId: "chrome" \| "edge" \| "firefox" }` | Cierra el navegador y borra su historial |
+| POST | `/clear-browser-history` | `{ browserId: "chrome" \| "edge" \| "firefox" \| "brave" \| "opera" }` | Cierra el navegador y borra su historial |
 | POST | `/open-control-panel` | – | Abre el Panel de Control |
 | POST | `/open-windows-settings` | – | Abre la Configuración de Windows |
 | POST | `/open-printer-maintenance` | `{ printerName? }` | Abre propiedades de la impresora o la lista de dispositivos |
@@ -32,6 +32,6 @@ Debe quedar corriendo en segundo plano mientras usas el panel web (`http://local
 
 ## Notas importantes
 
-- **Borrar historial** cierra el proceso del navegador (`taskkill`) antes de eliminar el archivo, para liberar el bloqueo del archivo. Esto cerrará todas las ventanas abiertas de ese navegador.
+- **Borrar historial** cierra el proceso del navegador (`taskkill`) antes de eliminar el archivo, para liberar el bloqueo del archivo (con reintentos, ya que Windows puede tardar en soltarlo). Esto cerrará todas las ventanas abiertas de ese navegador. Se borra el historial de **todos los perfiles** encontrados (Chrome/Edge/Brave usan carpetas `Default`/`Profile N`; Opera no usa subcarpetas de perfil; Firefox usa `places.sqlite` dentro de su carpeta de perfil).
 - **Imprimir página de prueba** usa `Invoke-CimMethod PrintTestPage` sobre la impresora indicada; el nombre debe coincidir exactamente con el que aparece en Windows.
 - Pensado para uso local de un técnico en su propia máquina, no para exponerse en red ni en producción sin autenticación adicional.

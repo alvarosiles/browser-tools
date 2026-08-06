@@ -1,4 +1,4 @@
-import { Globe, Compass, Flame, History, Trash2 } from 'lucide-react'
+import { Globe, Compass, Flame, Shield, Circle, History, Trash2 } from 'lucide-react'
 import Card from './Card'
 import { clearBrowserHistory } from '../lib/localAgent'
 
@@ -6,6 +6,8 @@ const BROWSERS = [
   { id: 'chrome', name: 'Google Chrome', icon: Globe, color: 'text-red-400' },
   { id: 'edge', name: 'Microsoft Edge', icon: Compass, color: 'text-sky-400' },
   { id: 'firefox', name: 'Mozilla Firefox', icon: Flame, color: 'text-orange-400' },
+  { id: 'brave', name: 'Brave', icon: Shield, color: 'text-orange-500' },
+  { id: 'opera', name: 'Opera', icon: Circle, color: 'text-red-500' },
 ]
 
 export default function BrowserCleaner({ onNotify }) {

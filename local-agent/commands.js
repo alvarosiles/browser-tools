@@ -19,20 +19,34 @@ function run(command, { timeout } = {}) {
 
 // Carpeta "User Data" de cada navegador basado en Chromium. Los perfiles reales viven
 // en subcarpetas variables ("Default", "Profile 1", "Profile 41", ...), nunca fijas,
-// así que hay que enumerarlas en vez de asumir un nombre.
+// así que hay que enumerarlas en vez de asumir un nombre. Opera es la excepción: no usa
+// subcarpetas de perfil, el archivo History vive directo en "Opera Stable".
 const USER_DATA_DIRS = {
   chrome: path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data'),
   edge: path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data'),
+  brave: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
+  opera: path.join(os.homedir(), 'AppData', 'Roaming', 'Opera Software', 'Opera Stable'),
 }
+
+const FLAT_PROFILE_BROWSERS = new Set(['opera'])
 
 const PROCESS_NAMES = {
   chrome: 'chrome.exe',
   edge: 'msedge.exe',
   firefox: 'firefox.exe',
+  brave: 'brave.exe',
+  opera: 'opera.exe',
 }
 
 async function findChromiumHistoryFiles(browserId) {
   const userDataDir = USER_DATA_DIRS[browserId]
+
+  if (FLAT_PROFILE_BROWSERS.has(browserId)) {
+    const historyPath = path.join(userDataDir, 'History')
+    const exists = await fs.stat(historyPath).then(() => true).catch(() => false)
+    return exists ? [historyPath] : []
+  }
+
   const entries = await fs.readdir(userDataDir, { withFileTypes: true }).catch(() => [])
   const profileDirs = entries.filter(
     (e) => e.isDirectory() && (e.name === 'Default' || e.name.startsWith('Profile '))
@@ -60,12 +74,29 @@ async function findFirefoxHistoryFiles() {
   return historyFiles
 }
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Tras taskkill, Windows puede tardar un instante en liberar el handle del archivo
+// (el proceso ya no aparece en la lista de tareas pero el lock sigue activo unos ms).
+async function rmWithRetry(filePath, { retries = 5, delayMs = 400 } = {}) {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await fs.rm(filePath, { force: true })
+      return
+    } catch (err) {
+      if (err.code !== 'EBUSY' || attempt === retries) throw err
+      await wait(delayMs)
+    }
+  }
+}
+
 export async function clearBrowserHistory(browserId) {
   const processName = PROCESS_NAMES[browserId]
   if (!processName) throw new Error(`Navegador no soportado: ${browserId}`)
 
   // Cierra el navegador para liberar el bloqueo del archivo de historial.
   await run(`taskkill /IM ${processName} /F`).catch(() => {})
+  await wait(500)
 
   const historyFiles =
     browserId === 'firefox' ? await findFirefoxHistoryFiles() : await findChromiumHistoryFiles(browserId)
@@ -75,8 +106,8 @@ export async function clearBrowserHistory(browserId) {
   }
 
   for (const historyPath of historyFiles) {
-    await fs.rm(historyPath, { force: true })
-    await fs.rm(`${historyPath}-journal`, { force: true })
+    await rmWithRetry(historyPath)
+    await rmWithRetry(`${historyPath}-journal`)
   }
 
   return { browserId, historyFiles }
