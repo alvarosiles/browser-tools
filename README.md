@@ -1,16 +1,58 @@
-# React + Vite
+# IT Support Tools
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Panel de herramientas de soporte técnico para Windows. Interfaz web (React + Vite + Tailwind CSS) con tema oscuro, pensada para conectarse en el futuro con una aplicación de escritorio (agente local) que ejecute las acciones reales sobre el sistema.
 
-Currently, two official plugins are available:
+## Módulos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Borrar Historial de Navegadores** — Chrome, Edge y Firefox.
+- **Control de Windows** — reloj en tiempo real, accesos a Panel de Control y Configuración.
+- **Control de Impresión** — mantenimiento e impresión de página de prueba por nombre de impresora.
 
-## React Compiler
+Ninguna acción se ejecuta directamente desde el navegador: cada botón llama a funciones centralizadas en [src/lib/localAgent.js](src/lib/localAgent.js), que hoy simulan la solicitud (log + notificación) y están preparadas para apuntar a un servicio local (ej. `http://localhost:5177`) cuando exista.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Instalación
 
-## Expanding the Oxlint configuration
+```bash
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Desarrollo
+
+```bash
+npm run dev
+```
+
+Abre la URL que muestra Vite (por defecto `http://localhost:5173`).
+
+## Build de producción
+
+```bash
+npm run build
+npm run preview
+```
+
+## Estructura
+
+```
+src/
+  components/
+    Header.jsx
+    Footer.jsx
+    Dashboard.jsx
+    Card.jsx
+    BrowserCleaner.jsx
+    WindowsTools.jsx
+    PrinterTools.jsx
+    Toast.jsx
+  hooks/
+    useToast.js
+  lib/
+    localAgent.js   # punto único de integración con la app de escritorio
+  App.jsx
+  main.jsx
+  index.css
+```
+
+## Integración futura con Windows
+
+`src/lib/localAgent.js` centraliza todas las acciones que requieren acceso al sistema operativo (limpiar historial, abrir paneles del sistema, gestionar impresoras). Para conectar con el agente local real, sustituir el cuerpo de `requestLocalAction` por una llamada `fetch` al servicio que se instale en el equipo del usuario.
