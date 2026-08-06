@@ -6,22 +6,24 @@ import { openPrinterMaintenance, printTestPage } from '../lib/localAgent'
 export default function PrinterTools({ onNotify }) {
   const [printerName, setPrinterName] = useState('')
 
-  const handleMaintenance = () => {
-    openPrinterMaintenance(printerName)
-    onNotify(
-      printerName
-        ? `Abriendo mantenimiento para "${printerName}".`
-        : 'Abriendo mantenimiento de impresora.'
-    )
+  const handleMaintenance = async () => {
+    try {
+      await openPrinterMaintenance(printerName)
+      onNotify(
+        printerName ? `Mantenimiento de "${printerName}" abierto.` : 'Panel de impresoras abierto.'
+      )
+    } catch (err) {
+      onNotify(err.message)
+    }
   }
 
-  const handleTestPage = () => {
-    printTestPage(printerName)
-    onNotify(
-      printerName
-        ? `Enviando página de prueba a "${printerName}".`
-        : 'Enviando página de prueba a la impresora predeterminada.'
-    )
+  const handleTestPage = async () => {
+    try {
+      await printTestPage(printerName)
+      onNotify(`Página de prueba enviada a "${printerName}".`)
+    } catch (err) {
+      onNotify(err.message)
+    }
   }
 
   return (

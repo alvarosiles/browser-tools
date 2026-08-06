@@ -9,9 +9,13 @@ const BROWSERS = [
 ]
 
 export default function BrowserCleaner({ onNotify }) {
-  const handleClear = (browser) => {
-    clearBrowserHistory(browser.id)
-    onNotify(`Solicitud de limpieza enviada para ${browser.name}.`)
+  const handleClear = async (browser) => {
+    try {
+      await clearBrowserHistory(browser.id)
+      onNotify(`Historial de ${browser.name} borrado correctamente.`)
+    } catch (err) {
+      onNotify(err.message)
+    }
   }
 
   return (

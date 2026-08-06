@@ -1,21 +1,25 @@
-// Punto único de integración con la futura aplicación de escritorio (servicio local)
-// que ejecutará las acciones reales sobre Windows (limpieza de historial, paneles del
-// sistema, impresión, etc). Por ahora estas funciones simulan la solicitud y devuelven
-// una promesa resuelta; cuando exista el agente local, reemplazar el cuerpo por una
-// llamada real (ej. fetch a http://localhost:PORT/api/...).
+// Punto único de integración con la aplicación de escritorio (servicio local, ver
+// carpeta local-agent/) que ejecuta las acciones reales sobre Windows: limpieza de
+// historial, paneles del sistema, impresión, etc. Requiere que el servicio local esté
+// corriendo (npm start dentro de local-agent/). Si no está disponible, la promesa se
+// rechaza y quien llame debe mostrar el error al usuario.
 
 const LOCAL_AGENT_BASE_URL = 'http://localhost:5177'
 
 async function requestLocalAction(action, payload = {}) {
-  // TODO: reemplazar por integración real, ej:
-  // return fetch(`${LOCAL_AGENT_BASE_URL}/${action}`, {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify(payload),
-  // }).then((res) => res.json())
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
 
-  console.info(`[localAgent] Acción solicitada: ${action}`, payload)
-  return Promise.resolve({ ok: true, action, payload, simulated: true })
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'La acción solicitada falló en el servicio local.')
+  }
+  return data
 }
 
 export function clearBrowserHistory(browserId) {

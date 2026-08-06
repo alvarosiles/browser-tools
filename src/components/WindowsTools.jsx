@@ -27,14 +27,22 @@ export default function WindowsTools({ onNotify }) {
     return () => clearInterval(interval)
   }, [])
 
-  const handleControlPanel = () => {
-    openControlPanel()
-    onNotify('Solicitud enviada: abrir Panel de Control.')
+  const handleControlPanel = async () => {
+    try {
+      await openControlPanel()
+      onNotify('Panel de Control abierto.')
+    } catch (err) {
+      onNotify(err.message)
+    }
   }
 
-  const handleSettings = () => {
-    openWindowsSettings()
-    onNotify('Solicitud enviada: abrir Configuración de Windows.')
+  const handleSettings = async () => {
+    try {
+      await openWindowsSettings()
+      onNotify('Configuración de Windows abierta.')
+    } catch (err) {
+      onNotify(err.message)
+    }
   }
 
   return (
