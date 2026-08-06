@@ -1,8 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import {
-  clearBrowserHistory,
-  clearBrowserCache,
+  clearBrowserData,
   openControlPanel,
   openWindowsSettings,
   openPrinterMaintenance,
@@ -27,8 +26,7 @@ function handle(action, fn) {
   })
 }
 
-handle('clear-browser-history', ({ browserId }) => clearBrowserHistory(browserId))
-handle('clear-browser-cache', ({ browserId }) => clearBrowserCache(browserId))
+handle('clear-browser-data', ({ browserId, types }) => clearBrowserData(browserId, types))
 handle('open-control-panel', () => openControlPanel())
 handle('open-windows-settings', () => openWindowsSettings())
 handle('open-printer-maintenance', ({ printerName }) => openPrinterMaintenance(printerName))

@@ -1,6 +1,7 @@
-import { Globe, Compass, Flame, Shield, Circle, History, Trash2, Database } from 'lucide-react'
+import { useState } from 'react'
+import { Globe, Compass, Flame, Shield, Circle, History, Loader2, PlayCircle } from 'lucide-react'
 import Card from './Card'
-import { clearBrowserHistory, clearBrowserCache } from '../lib/localAgent'
+import { clearBrowserData } from '../lib/localAgent'
 
 const BROWSERS = [
   { id: 'chrome', name: 'Google Chrome', icon: Globe, color: 'text-red-400' },
@@ -10,22 +11,51 @@ const BROWSERS = [
   { id: 'opera', name: 'Opera', icon: Circle, color: 'text-red-500' },
 ]
 
+const DATA_TYPES = [
+  { key: 'cookies', label: 'Cookies' },
+  { key: 'cache', label: 'Caché' },
+  { key: 'localStorage', label: 'Local Storage' },
+  { key: 'sessionStorage', label: 'Session Storage' },
+  { key: 'indexedDB', label: 'IndexedDB' },
+  { key: 'serviceWorkers', label: 'Service Workers' },
+  { key: 'history', label: 'Historial' },
+]
+
+const emptyRow = () => Object.fromEntries(DATA_TYPES.map((t) => [t.key, false]))
+const emptySelection = () => Object.fromEntries(BROWSERS.map((b) => [b.id, emptyRow()]))
+
 export default function BrowserCleaner({ onNotify }) {
-  const handleClearHistory = async (browser) => {
-    try {
-      await clearBrowserHistory(browser.id)
-      onNotify(`Historial de ${browser.name} borrado correctamente.`)
-    } catch (err) {
-      onNotify(err.message)
-    }
+  const [selection, setSelection] = useState(emptySelection)
+  const [processing, setProcessing] = useState(false)
+
+  const toggle = (browserId, typeKey) => {
+    setSelection((prev) => ({
+      ...prev,
+      [browserId]: { ...prev[browserId], [typeKey]: !prev[browserId][typeKey] },
+    }))
   }
 
-  const handleClearCache = async (browser) => {
+  const selectedBrowserCount = Object.values(selection).filter((row) =>
+    Object.values(row).some(Boolean)
+  ).length
+
+  const handleProcess = async () => {
+    setProcessing(true)
     try {
-      await clearBrowserCache(browser.id)
-      onNotify(`Caché de ${browser.name} borrada correctamente.`)
-    } catch (err) {
-      onNotify(err.message)
+      for (const browser of BROWSERS) {
+        const types = DATA_TYPES.map((t) => t.key).filter((key) => selection[browser.id][key])
+        if (types.length === 0) continue
+
+        try {
+          await clearBrowserData(browser.id, types)
+          onNotify(`${browser.name}: datos seleccionados borrados correctamente.`)
+        } catch (err) {
+          onNotify(`${browser.name}: ${err.message}`)
+        }
+      }
+    } finally {
+      setProcessing(false)
+      setSelection(emptySelection())
     }
   }
 
@@ -33,37 +63,54 @@ export default function BrowserCleaner({ onNotify }) {
     <Card
       icon={History}
       title="Borrar Historial de Navegadores"
-      description="Seleccione un navegador y haga clic en Borrar Historial o Borrar Caché"
+      description="Marque los tipos de dato por navegador y presione Procesar"
     >
-      <div className="flex flex-col gap-2">
-        {BROWSERS.map((browser) => (
-          <div
-            key={browser.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 transition-colors hover:border-slate-700"
-          >
-            <div className="flex items-center gap-3">
-              <browser.icon className={`h-5 w-5 ${browser.color}`} />
-              <span className="text-sm font-medium text-slate-200">{browser.name}</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleClearCache(browser)}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-blue-500/50 hover:bg-slate-800"
-              >
-                <Database className="h-3.5 w-3.5" />
-                Borrar Caché
-              </button>
-              <button
-                onClick={() => handleClearHistory(browser)}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-500 active:bg-blue-700"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Borrar Historial
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-800 bg-slate-950/50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <th className="whitespace-nowrap px-4 py-2.5 font-medium">Navegador</th>
+              {DATA_TYPES.map((type) => (
+                <th key={type.key} className="whitespace-nowrap px-3 py-2.5 text-center font-medium">
+                  {type.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {BROWSERS.map((browser) => (
+              <tr key={browser.id} className="border-b border-slate-800/60 last:border-0">
+                <td className="whitespace-nowrap px-4 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <browser.icon className={`h-4 w-4 flex-shrink-0 ${browser.color}`} />
+                    <span className="font-medium text-slate-200">{browser.name}</span>
+                  </div>
+                </td>
+                {DATA_TYPES.map((type) => (
+                  <td key={type.key} className="px-3 py-2.5 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selection[browser.id][type.key]}
+                      onChange={() => toggle(browser.id, type.key)}
+                      disabled={processing}
+                      className="h-4 w-4 cursor-pointer accent-blue-600"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+
+      <button
+        onClick={handleProcess}
+        disabled={selectedBrowserCount === 0 || processing}
+        className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+      >
+        {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+        {processing ? 'Procesando...' : `Procesar${selectedBrowserCount ? ` (${selectedBrowserCount})` : ''}`}
+      </button>
     </Card>
   )
 }

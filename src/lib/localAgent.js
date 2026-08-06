@@ -22,12 +22,8 @@ async function requestLocalAction(action, payload = {}) {
   return data
 }
 
-export function clearBrowserHistory(browserId) {
-  return requestLocalAction('clear-browser-history', { browserId })
-}
-
-export function clearBrowserCache(browserId) {
-  return requestLocalAction('clear-browser-cache', { browserId })
+export function clearBrowserData(browserId, types) {
+  return requestLocalAction('clear-browser-data', { browserId, types })
 }
 
 export function openControlPanel() {

@@ -74,35 +74,40 @@ async function findChromiumHistoryFiles(browserId) {
   return historyPaths.filter(Boolean)
 }
 
-// "Borrar Caché" cubre todos los datos de sitios web (equivalente a "Cookies y otros
-// datos de sitios" + "Imágenes y archivos almacenados en caché" de Chrome), pero NO
-// el historial de navegación: caché de recursos, cookies, Local/Session Storage,
-// IndexedDB y Service Workers (incluye su Cache Storage).
-const PROFILE_CACHE_SUBDIRS = [
-  'Cache',
-  'Code Cache',
-  'GPUCache',
-  'Cookies',
-  'Cookies-journal',
-  path.join('Network', 'Cookies'),
-  path.join('Network', 'Cookies-journal'),
-  'Local Storage',
-  'Session Storage',
-  'IndexedDB',
-  'Service Worker',
-]
-const SHARED_CACHE_SUBDIRS = ['GPUCache', 'GrShaderCache', 'ShaderCache']
+// Tipos de datos de sitios web borrables de forma independiente (todo salvo "history",
+// que se maneja aparte porque usa un archivo distinto — History — no una carpeta).
+// Chromium guarda cada tipo en subcarpetas fijas dentro de cada perfil.
+const CHROMIUM_TYPE_SUBDIRS = {
+  cache: ['Cache', 'Code Cache', 'GPUCache'],
+  cookies: [
+    'Cookies',
+    'Cookies-journal',
+    path.join('Network', 'Cookies'),
+    path.join('Network', 'Cookies-journal'),
+  ],
+  localStorage: ['Local Storage'],
+  sessionStorage: ['Session Storage'],
+  indexedDB: ['IndexedDB'],
+  serviceWorkers: ['Service Worker'],
+}
+// Además de por perfil, Chromium comparte estas carpetas de caché de shaders/GPU a
+// nivel de "User Data", sin depender del perfil activo.
+const CHROMIUM_SHARED_TYPE_SUBDIRS = {
+  cache: ['GPUCache', 'GrShaderCache', 'ShaderCache'],
+}
 
-async function findChromiumCacheDirs(browserId) {
+async function findChromiumTypeDirs(browserId, types) {
   const userDataDir = USER_DATA_DIRS[browserId]
   const profileDirs = await findChromiumProfileDirs(browserId)
 
   const perProfile = profileDirs.flatMap((dir) =>
-    PROFILE_CACHE_SUBDIRS.map((sub) => path.join(dir, sub))
+    types.flatMap((type) => (CHROMIUM_TYPE_SUBDIRS[type] || []).map((sub) => path.join(dir, sub)))
   )
-  const shared = SHARED_CACHE_SUBDIRS.map((sub) => path.join(userDataDir, sub))
+  const shared = types.flatMap((type) =>
+    (CHROMIUM_SHARED_TYPE_SUBDIRS[type] || []).map((sub) => path.join(userDataDir, sub))
+  )
 
-  const candidates = [...perProfile, ...shared]
+  const candidates = [...new Set([...perProfile, ...shared])]
   const resolved = await Promise.all(candidates.map(existingPath))
   return resolved.filter(Boolean)
 }
@@ -122,24 +127,39 @@ async function findFirefoxHistoryFiles() {
   return paths.filter(Boolean)
 }
 
-// Firefox separa datos de perfil (Roaming: cookies, storage/IndexedDB/localStorage) de
-// la caché de recursos en disco (Local, misma carpeta de perfil, solo "cache2").
-const FIREFOX_ROAMING_SITE_DATA = ['cookies.sqlite', 'cookies.sqlite-wal', 'webappsstore.sqlite', 'storage']
-const FIREFOX_LOCAL_CACHE = ['cache2', 'storage'] // storage/default también cachea Service Workers/Cache API
+// Firefox separa datos de perfil (Roaming: cookies, storage con IndexedDB/localStorage/
+// Service Workers unificados) de la caché de recursos en disco (Local, "cache2"). A
+// diferencia de Chromium, Firefox NO separa localStorage/IndexedDB/Service Workers en
+// carpetas distintas — todo vive junto en storage/default/<origen>/, así que estos tres
+// tipos comparten la misma carpeta (borrar cualquiera de los tres borra los tres).
+const FIREFOX_ROAMING_TYPE_SUBDIRS = {
+  cookies: ['cookies.sqlite', 'cookies.sqlite-wal'],
+  localStorage: ['webappsstore.sqlite', 'storage'],
+  indexedDB: ['storage'],
+  serviceWorkers: ['storage'],
+}
+const FIREFOX_LOCAL_TYPE_SUBDIRS = {
+  cache: ['cache2'],
+}
 
-async function findFirefoxCacheDirs() {
+async function findFirefoxTypeDirs(types) {
   const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
   const localProfilesDir = path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles')
   const profileNames = await findFirefoxProfileNames()
 
   const roaming = profileNames.flatMap((name) =>
-    FIREFOX_ROAMING_SITE_DATA.map((sub) => path.join(roamingProfilesDir, name, sub))
+    types.flatMap((type) =>
+      (FIREFOX_ROAMING_TYPE_SUBDIRS[type] || []).map((sub) => path.join(roamingProfilesDir, name, sub))
+    )
   )
   const local = profileNames.flatMap((name) =>
-    FIREFOX_LOCAL_CACHE.map((sub) => path.join(localProfilesDir, name, sub))
+    types.flatMap((type) =>
+      (FIREFOX_LOCAL_TYPE_SUBDIRS[type] || []).map((sub) => path.join(localProfilesDir, name, sub))
+    )
   )
 
-  const resolved = await Promise.all([...roaming, ...local].map(existingPath))
+  const candidates = [...new Set([...roaming, ...local])]
+  const resolved = await Promise.all(candidates.map(existingPath))
   return resolved.filter(Boolean)
 }
 
@@ -184,39 +204,55 @@ async function closeBrowser(browserId, { retries = 8, delayMs = 400 } = {}) {
   )
 }
 
-export async function clearBrowserHistory(browserId) {
+export const BROWSER_DATA_TYPES = [
+  'cookies',
+  'cache',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
+  'serviceWorkers',
+  'history',
+]
+
+// Borra, en una sola pasada (un solo cierre del navegador), cualquier combinación de
+// tipos de datos seleccionados. "history" se trata aparte porque usa un archivo con
+// nombre propio (History / places.sqlite) en vez de una carpeta de datos de sitio.
+export async function clearBrowserData(browserId, types) {
+  const validTypes = (types || []).filter((t) => BROWSER_DATA_TYPES.includes(t))
+  if (validTypes.length === 0) throw new Error('Debe seleccionar al menos un tipo de dato a borrar')
+
   await closeBrowser(browserId)
 
-  const historyFiles =
-    browserId === 'firefox' ? await findFirefoxHistoryFiles() : await findChromiumHistoryFiles(browserId)
+  const cleared = {}
 
-  if (historyFiles.length === 0) {
-    throw new Error(`No se encontró ningún perfil con historial para ${browserId}`)
+  if (validTypes.includes('history')) {
+    const historyFiles =
+      browserId === 'firefox' ? await findFirefoxHistoryFiles() : await findChromiumHistoryFiles(browserId)
+    for (const historyPath of historyFiles) {
+      await rmWithRetry(historyPath)
+      await rmWithRetry(`${historyPath}-journal`)
+    }
+    cleared.history = historyFiles
   }
 
-  for (const historyPath of historyFiles) {
-    await rmWithRetry(historyPath)
-    await rmWithRetry(`${historyPath}-journal`)
+  const dataTypes = validTypes.filter((t) => t !== 'history')
+  if (dataTypes.length > 0) {
+    const dataDirs =
+      browserId === 'firefox'
+        ? await findFirefoxTypeDirs(dataTypes)
+        : await findChromiumTypeDirs(browserId, dataTypes)
+    for (const dir of dataDirs) {
+      await rmWithRetry(dir, { recursive: true })
+    }
+    cleared.dataDirs = dataDirs
   }
 
-  return { browserId, historyFiles }
-}
-
-export async function clearBrowserCache(browserId) {
-  await closeBrowser(browserId)
-
-  const cacheDirs =
-    browserId === 'firefox' ? await findFirefoxCacheDirs() : await findChromiumCacheDirs(browserId)
-
-  if (cacheDirs.length === 0) {
-    throw new Error(`No se encontró ninguna carpeta de caché para ${browserId}`)
+  const totalPaths = (cleared.history?.length || 0) + (cleared.dataDirs?.length || 0)
+  if (totalPaths === 0) {
+    throw new Error(`No se encontraron datos de los tipos seleccionados para ${browserId}`)
   }
 
-  for (const cacheDir of cacheDirs) {
-    await rmWithRetry(cacheDir, { recursive: true })
-  }
-
-  return { browserId, cacheDirs }
+  return { browserId, types: validTypes, ...cleared }
 }
 
 export async function openControlPanel() {
