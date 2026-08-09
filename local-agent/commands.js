@@ -303,9 +303,23 @@ export async function clearBrowserData(browserId, types) {
     }
     cleared.history = historyFiles
 
+    // "Cerradas hace poco" (pestañas restaurables) no vive en History, sino en la
+    // carpeta "Sessions" del perfil — Chromium la usa para reabrir pestañas/ventanas
+    // cerradas recientemente. Si no se borra, sigue mostrando páginas "viejas" aunque
+    // el historial de navegación ya esté limpio.
     if (browserId !== 'firefox') {
       const profileDirs = await findChromiumProfileDirs(browserId)
       cleared.syncDisabled = await disableChromiumSync(profileDirs)
+      for (const dir of profileDirs) {
+        await rmWithRetry(path.join(dir, 'Sessions'), { recursive: true })
+      }
+    } else {
+      const profileNames = await findFirefoxProfileNames()
+      const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+      for (const name of profileNames) {
+        await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore-backups'), { recursive: true })
+        await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore.jsonlz4'))
+      }
     }
   }
 
