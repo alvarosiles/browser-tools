@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "web": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
-    "deploy": "cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
+    "deploy": "node scripts/build-agent-exe.js && cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
   },
   "dependencies": {
     "lucide-react": "^1.28.0",

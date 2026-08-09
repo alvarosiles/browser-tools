@@ -1,6 +1,11 @@
 import express from 'express'
 import cors from 'cors'
 import crypto from 'node:crypto'
+import os from 'node:os'
+import path from 'node:path'
+import fs from 'node:fs'
+import { execSync } from 'node:child_process'
+import { isSea } from 'node:sea'
 import {
   clearBrowserData,
   openControlPanel,
@@ -16,6 +21,32 @@ import {
 } from './commands.js'
 
 const PORT = process.env.PORT || 5177
+
+// Cuando corre empaquetado como .exe (Node SEA), el botón "Instalar App" de la web solo
+// descarga este binario — la "instalación" real (copiarse a una ubicación fija y arrancar
+// junto con Windows) la hace el propio .exe la primera vez que se ejecuta. Así el usuario
+// no depende de tener Node.js instalado ni de correr comandos por consola.
+function ensureInstalled() {
+  if (!isSea()) return
+  try {
+    const installDir = path.join(os.homedir(), 'AppData', 'Local', 'BrowserToolsAgent')
+    const installPath = path.join(installDir, 'BrowserToolsAgent.exe')
+    const currentPath = path.resolve(process.execPath)
+    if (currentPath.toLowerCase() === installPath.toLowerCase()) return
+
+    fs.mkdirSync(installDir, { recursive: true })
+    fs.copyFileSync(currentPath, installPath)
+    execSync(
+      `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v BrowserToolsAgent /t REG_SZ /d "\\"${installPath}\\"" /f`,
+      { windowsHide: true }
+    )
+    console.log(`Instalado en ${installPath}. Se iniciará automáticamente al encender Windows.`)
+  } catch (err) {
+    console.error('No se pudo completar la instalación automática:', err.message)
+  }
+}
+
+ensureInstalled()
 
 const app = express()
 app.use(cors())

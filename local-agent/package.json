@@ -5,10 +5,15 @@
   "type": "module",
   "description": "Servicio local (Windows) que ejecuta las acciones reales solicitadas por el panel web IT Support Tools.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:exe": "node build-exe.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
   }
 }

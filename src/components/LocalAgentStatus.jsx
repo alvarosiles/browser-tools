@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Download } from 'lucide-react'
 import { isLocalAgentAvailable } from '../lib/localAgent'
 
 export default function LocalAgentStatus() {
@@ -27,11 +27,18 @@ export default function LocalAgentStatus() {
       <div>
         <p className="font-medium">Servicio local no detectado</p>
         <p className="text-amber-300/80">
-          Las acciones de esta página necesitan el servicio local corriendo en esta PC. Ejecuta{' '}
-          <code className="rounded bg-amber-900/50 px-1 py-0.5">Iniciar-Servicio.bat</code> dentro de la
-          carpeta <code className="rounded bg-amber-900/50 px-1 py-0.5">local-agent</code> y deja esa
-          ventana abierta.
+          Las acciones de esta página necesitan el servicio local corriendo en esta PC. Descarga e
+          instala la app (una sola vez, se abre sola en cada inicio de Windows) o, si ya la tienes,
+          revisa que esté corriendo.
         </p>
+        <a
+          href={`${import.meta.env.BASE_URL}downloads/BrowserToolsAgent.exe`}
+          download
+          className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-amber-950 transition hover:bg-amber-400"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Instalar App
+        </a>
       </div>
     </div>
   )
