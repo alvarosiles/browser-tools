@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Play, Square, Loader2 } from 'lucide-react'
 import { getServiceStatus, startService, stopService } from '../lib/localAgent'
+import { useLanguage } from '../lib/i18n'
 
 export default function ServiceToggle() {
+  const { t } = useLanguage()
   const [status, setStatus] = useState({ installed: false, running: false })
   const [busy, setBusy] = useState(false)
 
@@ -44,11 +46,11 @@ export default function ServiceToggle() {
       type="button"
       onClick={toggle}
       disabled={busy}
-      title={status.running ? 'Detener el servicio local' : 'Iniciar el servicio local'}
+      title={status.running ? t('service.stop') : t('service.start')}
       className={`ml-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
         status.running
-          ? 'bg-emerald-950/50 text-emerald-300 hover:bg-red-950/50 hover:text-red-300'
-          : 'bg-slate-800 text-slate-300 hover:bg-emerald-950/50 hover:text-emerald-300'
+          ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-700 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-red-950/50 dark:hover:text-red-300'
+          : 'bg-slate-200 text-slate-700 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-emerald-950/50 dark:hover:text-emerald-300'
       }`}
     >
       {busy ? (
@@ -58,7 +60,7 @@ export default function ServiceToggle() {
       ) : (
         <Play className="h-3.5 w-3.5" />
       )}
-      {status.running ? 'Servicio activo' : 'Servicio detenido'}
+      {status.running ? t('service.running') : t('service.stopped')}
     </button>
   )
 }

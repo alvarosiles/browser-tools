@@ -528,6 +528,29 @@ export async function openWindowsSettings() {
   await run('start ms-settings:')
 }
 
+export async function openTaskManager() {
+  await run('start "" taskmgr.exe')
+}
+
+// El propio agente puede no estar corriendo elevado, pero Start-Process -Verb RunAs
+// dispara el UAC solo para esta ventana de CMD puntual, sin necesitar que el servicio
+// local entero esté elevado.
+export async function openCmdAsAdmin() {
+  await runPowerShell('Start-Process cmd.exe -Verb RunAs')
+}
+
+export async function openPowerShell() {
+  await run('start "" powershell.exe')
+}
+
+export async function openServices() {
+  await run('start "" services.msc')
+}
+
+export async function openDeviceManager() {
+  await run('start "" devmgmt.msc')
+}
+
 export async function openPrinterMaintenance(printerName) {
   if (printerName) {
     await run(`start "" rundll32 printui.dll,PrintUIEntry /p /n "${printerName}"`)
@@ -843,4 +866,398 @@ export async function openBackupFolder(date) {
   await fs.mkdir(dir, { recursive: true })
   await run(`start "" explorer "${dir}"`)
   return { dir }
+}
+
+// ---------------------------------------------------------------------------
+// Estado de red
+// ---------------------------------------------------------------------------
+
+// Adaptadores virtuales (VirtualBox, VMware, Hyper-V, VPNs, etc.) suelen listarse antes
+// que el adaptador físico real en os.networkInterfaces() y no sirven para identificar la
+// IP de la red local del equipo, así que se las excluye al elegir la IP principal.
+const VIRTUAL_INTERFACE_PATTERN = /virtualbox|vmware|hyper-v|virtual|loopback|tailscale|npcap|tap-|docker|vpn/i
+
+// Ignora interfaces internas (loopback) y las que no tienen dirección IPv4 asignada
+// (adaptadores deshabilitados, tunnels sin uso, etc.), que no aportan al diagnóstico.
+function getLocalInterfaces() {
+  const interfaces = os.networkInterfaces()
+  const result = []
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    for (const addr of addrs || []) {
+      if (addr.internal) continue
+      result.push({
+        name,
+        address: addr.address,
+        family: addr.family,
+        mac: addr.mac,
+        virtual: VIRTUAL_INTERFACE_PATTERN.test(name),
+      })
+    }
+  }
+  return result
+}
+
+// "netsh wlan show interfaces" trae el estado de la conexión Wi-Fi activa (SSID actual,
+// señal, banda, etc.). Si el equipo no tiene adaptador Wi-Fi o está apagado, el comando
+// devuelve un mensaje de error en vez de datos, así que se tolera el fallo.
+// netsh imprime en la página de códigos activa de la consola (cp850/cp1252 en Windows en
+// español), que Node decodifica como UTF-8 por defecto y corrompe tildes/ñ. "chcp 65001"
+// cambia esa consola a UTF-8 antes de invocar netsh, evitando el problema en origen.
+async function runNetsh(args) {
+  return run(`chcp 65001 >nul && netsh ${args}`)
+}
+
+async function getActiveWifiInfo() {
+  const { stdout } = await runNetsh('wlan show interfaces').catch(() => ({ stdout: '' }))
+  const info = {}
+  for (const line of stdout.split(/\r?\n/)) {
+    const [rawKey, ...rest] = line.split(':')
+    if (!rawKey || rest.length === 0) continue
+    const key = rawKey.trim()
+    const value = rest.join(':').trim()
+    if (key === 'SSID' && !info.ssid) info.ssid = value
+    if (key === 'Señal' || key === 'Signal') info.signal = value
+    if (key === 'Banda de radio' || key === 'Radio type') info.radioType = value
+    if (key === 'Estado' || key === 'State') info.state = value
+  }
+  return info
+}
+
+// Lista los perfiles Wi-Fi guardados en Windows. Cada perfil requiere una segunda
+// consulta ("show profile <ssid> key=clear") para revelar la contraseña en texto plano,
+// ya que "show profiles" solo lista los nombres.
+async function getSavedWifiNetworks() {
+  const { stdout } = await runNetsh('wlan show profiles').catch(() => ({ stdout: '' }))
+  const names = []
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:Perfil de todos los usuarios|All User Profile)\s*:\s*(.+)$/)
+    if (match) names.push(match[1].trim())
+  }
+
+  const networks = []
+  for (const name of names) {
+    const escaped = name.replace(/"/g, '\\"')
+    const { stdout: profileOut } = await runNetsh(`wlan show profile name="${escaped}" key=clear`).catch(() => ({
+      stdout: '',
+    }))
+    let password = null
+    let authentication = null
+    for (const line of profileOut.split(/\r?\n/)) {
+      const keyMatch = line.match(/^\s*(?:Contenido de la clave|Key Content)\s*:\s*(.+)$/)
+      if (keyMatch) password = keyMatch[1].trim()
+      const authMatch = line.match(/^\s*(?:Autenticación|Authentication)\s*:\s*(.+)$/)
+      if (authMatch) authentication = authMatch[1].trim()
+    }
+    networks.push({ ssid: name, password, authentication })
+  }
+  return networks
+}
+
+// ---------------------------------------------------------------------------
+// Estado de impresoras
+// ---------------------------------------------------------------------------
+
+export async function listPrinters() {
+  const script = `
+Get-Printer | ForEach-Object {
+  $jobCount = (Get-PrintJob -PrinterName $_.Name -ErrorAction SilentlyContinue | Measure-Object).Count
+  [PSCustomObject]@{
+    Name = $_.Name
+    Status = $_.PrinterStatus.ToString()
+    Default = $_.Default
+    PortName = $_.PortName
+    JobCount = $jobCount
+  }
+} | ConvertTo-Json -Compress
+`
+  const { stdout } = await runPowerShell(script, { timeout: 15000 })
+  const trimmed = stdout.trim()
+  if (!trimmed) return []
+  const parsed = JSON.parse(trimmed)
+  return Array.isArray(parsed) ? parsed : [parsed]
+}
+
+export async function setDefaultPrinter(printerName) {
+  if (!printerName) throw new Error('Debe indicar el nombre de la impresora')
+  const escaped = printerName.replace(/'/g, "''")
+  const script = `
+$printer = Get-CimInstance -ClassName Win32_Printer -Filter "Name='${escaped}'" -ErrorAction SilentlyContinue
+if (-not $printer) { Write-Output "NOTFOUND"; exit }
+Invoke-CimMethod -InputObject $printer -MethodName SetDefaultPrinter | Out-Null
+Write-Output "OK"
+`
+  const { stdout } = await runPowerShell(script, { timeout: 15000 })
+  const trimmed = stdout.trim()
+  if (trimmed === 'NOTFOUND') {
+    throw new Error(`No se encontró ninguna impresora llamada "${printerName}".`)
+  }
+  return { printerName }
+}
+
+// Vaciar la cola sin reiniciar el Spooler primero puede dejar trabajos "zombis" que
+// Windows sigue reportando aunque el archivo ya no exista. Se detiene el servicio,
+// se borran los archivos de spool pendientes y se reinicia, igual que hace el truco
+// manual habitual de soporte técnico.
+export async function clearPrintQueue(printerName) {
+  await run('net stop spooler').catch(() => {})
+  const spoolDir = 'C:\\Windows\\System32\\spool\\PRINTERS'
+  await run(`del /f /q "${spoolDir}\\*.*"`).catch(() => {})
+  await run('net start spooler')
+  return { printerName: printerName || null }
+}
+
+export async function removeStuckJobs(printerName) {
+  if (!printerName) throw new Error('Debe indicar el nombre de la impresora')
+  const escaped = printerName.replace(/'/g, "''")
+  const script = `
+$jobs = Get-PrintJob -PrinterName '${escaped}' -ErrorAction SilentlyContinue
+$count = ($jobs | Measure-Object).Count
+$jobs | Remove-PrintJob -ErrorAction SilentlyContinue
+Write-Output $count
+`
+  const { stdout } = await runPowerShell(script, { timeout: 15000 })
+  const removed = Number(stdout.trim()) || 0
+  return { printerName, removed }
+}
+
+export async function restartSpooler() {
+  await run('net stop spooler')
+  await run('net start spooler')
+  return {}
+}
+
+// ---------------------------------------------------------------------------
+// Información del equipo
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes) {
+  const gb = bytes / 1024 ** 3
+  return `${gb.toFixed(1)} GB`
+}
+
+// CPU, disco libre, dominio/grupo de trabajo y número de serie no están disponibles vía
+// os.*, así que se consultan con CIM/WMI en una sola llamada a PowerShell para evitar
+// levantar el intérprete varias veces.
+async function getWmiSystemInfo() {
+  const script = `
+$cpu = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
+$disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
+$cs = Get-CimInstance -ClassName Win32_ComputerSystem
+$bios = Get-CimInstance -ClassName Win32_BIOS
+# La interfaz con ruta por defecto es la que realmente sale a la red/internet — a
+# diferencia de recorrer todos los adaptadores, esto evita elegir por error un adaptador
+# virtual (VirtualBox, VMware, VPN) que no tiene gateway configurado.
+$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object -Property RouteMetric | Select-Object -First 1
+$localIp = $null
+if ($route) {
+  $localIp = (Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress
+}
+[PSCustomObject]@{
+  CpuName = $cpu.Name
+  DiskFreeBytes = $disk.FreeSpace
+  DiskTotalBytes = $disk.Size
+  Domain = $cs.Domain
+  PartOfDomain = $cs.PartOfDomain
+  Workgroup = $cs.Workgroup
+  SerialNumber = $bios.SerialNumber
+  LocalIp = $localIp
+} | ConvertTo-Json -Compress
+`
+  const { stdout } = await runPowerShell(script, { timeout: 15000 })
+  return JSON.parse(stdout.trim())
+}
+
+// El agente no tiene forma de conocer la IP pública sin consultarla a un servicio
+// externo; si no hay internet o el servicio falla, se informa como no disponible en
+// vez de romper el resto de la información del equipo.
+async function getPublicIp() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.ip || null
+  } catch {
+    return null
+  }
+}
+
+export async function getSystemInfo() {
+  const [wmi, publicIp] = await Promise.all([
+    getWmiSystemInfo().catch(() => ({})),
+    getPublicIp(),
+  ])
+
+  const interfaces = getLocalInterfaces()
+  const localIp =
+    wmi.LocalIp ||
+    interfaces.find((i) => i.family === 'IPv4' && !i.virtual)?.address ||
+    interfaces.find((i) => i.family === 'IPv4')?.address ||
+    interfaces[0]?.address ||
+    null
+  const totalMem = os.totalmem()
+  const freeMem = os.freemem()
+
+  return {
+    computerName: os.hostname(),
+    userName: os.userInfo().username,
+    windowsVersion: `${os.type()} ${os.release()}`,
+    ramTotal: formatBytes(totalMem),
+    ramUsed: formatBytes(totalMem - freeMem),
+    cpu: wmi.CpuName || os.cpus()[0]?.model || null,
+    diskFree: wmi.DiskFreeBytes != null ? formatBytes(wmi.DiskFreeBytes) : null,
+    diskTotal: wmi.DiskTotalBytes != null ? formatBytes(wmi.DiskTotalBytes) : null,
+    localIp,
+    publicIp,
+    domain: wmi.PartOfDomain ? wmi.Domain : wmi.Workgroup || null,
+    serialNumber: wmi.SerialNumber || null,
+  }
+}
+
+export async function getNetworkStatus() {
+  const [interfaces, activeWifi, savedNetworks] = await Promise.all([
+    Promise.resolve(getLocalInterfaces()),
+    getActiveWifiInfo(),
+    getSavedWifiNetworks().catch(() => []),
+  ])
+
+  return {
+    hostname: os.hostname(),
+    interfaces,
+    activeWifi,
+    savedNetworks,
+  }
+}
+
+// TeamViewer y AnyDesk no se registran de forma confiable en "App Paths" (a diferencia de
+// los navegadores), así que se buscan directamente en sus ubicaciones de instalación
+// habituales. AnyDesk además soporta instalación "solo para este usuario" (sin admin),
+// que queda en AppData en vez de Program Files.
+const REMOTE_APP_PATHS = {
+  teamviewer: [
+    'C:\\Program Files\\TeamViewer\\TeamViewer.exe',
+    'C:\\Program Files (x86)\\TeamViewer\\TeamViewer.exe',
+  ],
+  anydesk: [
+    'C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe',
+    'C:\\Program Files\\AnyDesk\\AnyDesk.exe',
+    path.join(os.homedir(), 'AppData', 'Local', 'AnyDesk', 'AnyDesk.exe'),
+  ],
+}
+
+const REMOTE_APP_LABELS = {
+  teamviewer: 'TeamViewer',
+  anydesk: 'AnyDesk',
+}
+
+export async function openRemoteApp(appId) {
+  const candidates = REMOTE_APP_PATHS[appId]
+  if (!candidates) throw new Error(`Aplicación no soportada: ${appId}`)
+
+  for (const candidate of candidates) {
+    const found = await existingPath(candidate)
+    if (found) {
+      await run(`start "" "${found}"`)
+      return { appId, path: found }
+    }
+  }
+
+  throw new Error(`No se encontró ${REMOTE_APP_LABELS[appId]} instalado en este equipo.`)
+}
+
+// "net session" sin argumentos solo puede ejecutarse con privilegios de administrador
+// (falla con "Acceso denegado" en cualquier otro caso) — es el truco estándar para
+// detectar elevación sin depender de módulos nativos adicionales.
+export async function isElevated() {
+  try {
+    await run('net session')
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Accesos rápidos a carpetas
+// ---------------------------------------------------------------------------
+
+// %TEMP% del usuario (os.tmpdir()) y %APPDATA% (Roaming) no son rutas fijas: dependen del
+// usuario activo y de variables de entorno, así que se resuelven en vez de asumirse.
+const QUICK_FOLDERS = {
+  downloads: () => path.join(os.homedir(), 'Downloads'),
+  temp: () => os.tmpdir(),
+  appdata: () => process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
+  startup: () =>
+    path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'),
+}
+
+export async function openQuickFolder(folderKey) {
+  const resolver = QUICK_FOLDERS[folderKey]
+  if (!resolver) throw new Error(`Carpeta no soportada: ${folderKey}`)
+  const dir = resolver()
+  await fs.mkdir(dir, { recursive: true })
+  await run(`start "" explorer "${dir}"`)
+  return { folderKey, dir }
+}
+
+// ---------------------------------------------------------------------------
+// Reparaciones automáticas
+// ---------------------------------------------------------------------------
+
+// sfc, DISM y chkdsk pueden tardar varios minutos en equipos con discos lentos, así que no
+// se les pone timeout (a diferencia del resto de comandos): se prefiere esperar a que
+// terminen en vez de cortarlos a mitad de un escaneo del sistema de archivos.
+export async function runSfcScan() {
+  const { stdout } = await run('sfc /scannow')
+  return { output: stdout }
+}
+
+export async function runDismRestoreHealth() {
+  const { stdout } = await run('DISM /Online /Cleanup-Image /RestoreHealth')
+  return { output: stdout }
+}
+
+// "/scan" hace una verificación de solo lectura sin desmontar el volumen ni pedir
+// reinicio, a diferencia de "/f" (que sí requiere bloquear la unidad del sistema y
+// reiniciar). Es lo que corresponde a un botón de un clic sin interrumpir al usuario.
+export async function runChkdskScan() {
+  const drive = process.env.SystemDrive || 'C:'
+  const { stdout } = await run(`chkdsk ${drive} /scan`)
+  return { output: stdout }
+}
+
+export async function flushDns() {
+  const { stdout } = await run('ipconfig /flushdns')
+  return { output: stdout }
+}
+
+// Reinicia el stack Winsock a su estado por defecto (corrige "sin acceso a Internet"
+// causado por LSPs corruptos). El cambio requiere reiniciar el equipo para completarse.
+export async function resetWinsock() {
+  const { stdout } = await run('netsh winsock reset')
+  return { output: stdout, requiresRestart: true }
+}
+
+const REPAIR_STEPS = [
+  { id: 'flushDns', label: 'Flush DNS', run: flushDns },
+  { id: 'resetWinsock', label: 'Reset Winsock', run: resetWinsock },
+  { id: 'chkdsk', label: 'CHKDSK', run: runChkdskScan },
+  { id: 'sfc', label: 'SFC /scannow', run: runSfcScan },
+  { id: 'dism', label: 'DISM', run: runDismRestoreHealth },
+]
+
+// Ejecuta las cinco reparaciones en secuencia ("todo en un clic"). Igual que backupAll,
+// corre como job en segundo plano (sfc/DISM pueden tardar varios minutos) y reporta el
+// resultado de cada paso vía onProgress, sin que un paso fallido detenga a los demás.
+export async function runAllRepairs(onProgress) {
+  const results = []
+  for (const step of REPAIR_STEPS) {
+    try {
+      const result = await step.run()
+      results.push({ id: step.id, label: step.label, status: 'success', ...result })
+    } catch (err) {
+      results.push({ id: step.id, label: step.label, status: 'error', error: err.message })
+    }
+    onProgress?.(results.slice())
+  }
+  return { results, finishedAt: new Date().toISOString() }
 }

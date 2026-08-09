@@ -1,14 +1,25 @@
 @import "tailwindcss";
 
+/* Habilita el modo oscuro controlado por clase (.dark en <html>) en vez del predeterminado
+   basado en prefers-color-scheme del sistema operativo — así el toggle de Personalización
+   manda, independientemente del tema del SO. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 }
 
 body {
   margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+html.dark body {
   background-color: #0f1420;
   color: #e2e8f0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
 #root {
@@ -22,13 +33,23 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #131826;
+  background: #e2e8f0;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2c3548;
+  background: #cbd5e1;
   border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #131826;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #2c3548;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
   background: #3b4767;
 }
 

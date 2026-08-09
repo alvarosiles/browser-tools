@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s http://127.0.0.1:5173/src/components/Dashboard.jsx)",
+      "Bash(curl -s http://localhost:5173 -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(node --check commands.js)",
+      "Bash(node --check server.js)",
+      "Bash(curl -s http://localhost:5177/health)",
+      "Bash(curl -s http://localhost:5177/system-info)",
+      "Bash(powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, Path\")",
+      "Bash(powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 5178 -State Listen | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 5178 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId=9480' | Select-Object ProcessId, Name, CommandLine | Format-List\")",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Id 9480 -Force\")",
+      "Bash(curl -s http://localhost:5177/network-status)",
+      "Bash(powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 5173,5174,5175,5176,5177,5178 -State Listen -ErrorAction SilentlyContinue | Select-Object LocalPort, OwningProcess | Sort-Object LocalPort\")",
+      "PowerShell($pids = @\\(8916,2200,8052,9476,9184,9544\\); foreach \\($p in $pids\\) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; Get-NetTCPConnection -LocalPort 5173,5174,5175,5176,5177,5178 -State Listen -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173,5174,5175,5176,5177,5178 -State Listen -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:5177/printers)",
+      "Bash(curl -s http://localhost:5178/status)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5177,5178 -State Listen -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 3508 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"done\")",
+      "Bash(curl -s -X POST http://localhost:5177/flush-dns)",
+      "Bash(curl -s -X POST http://localhost:5177/open-quick-folder -H \"Content-Type: application/json\" -d \"{\\\\\"folderKey\\\\\":\\\\\"downloads\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:5177/run-all-repairs)",
+      "Bash(curl -s http://localhost:5177/repair-status/88848cf6-c114-4e6b-a4a9-e37b958bdf88)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5177,5178 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; \"cleared\")",
+      "Bash(curl -s http://localhost:5177/is-admin)",
+      "PowerShell(Start-Process \"http://localhost:5175\")",
+      "Bash(curl -s -X POST http://localhost:5177/open-powershell)",
+      "PowerShell(Start-Process \"http://localhost:5176\")",
+      "Bash(curl -s -X POST http://localhost:5177/open-remote-app -H \"Content-Type: application/json\" -d \"{\\\\\"appId\\\\\":\\\\\"teamviewer\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:5177/open-remote-app -H \"Content-Type: application/json\" -d \"{\\\\\"appId\\\\\":\\\\\"anydesk\\\\\"}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:5177/open-remote-app -H \"Content-Type: application/json\" -d \"{\\\\\"appId\\\\\":\\\\\"teamviewer\\\\\"}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:5177/open-remote-app -H \"Content-Type: application/json\" -d \"{\\\\\"appId\\\\\":\\\\\"anydesk\\\\\"}\")",
+      "PowerShell(Start-Process \"http://localhost:5173\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173,5174,5175,5176,5177,5178,5179,5180 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; \"cleared\")"
+    ]
+  }
+}

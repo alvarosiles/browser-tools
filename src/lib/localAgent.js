@@ -51,6 +51,26 @@ export function openWindowsSettings() {
   return requestLocalAction('open-windows-settings')
 }
 
+export function openTaskManager() {
+  return requestLocalAction('open-task-manager')
+}
+
+export function openCmdAsAdmin() {
+  return requestLocalAction('open-cmd-admin')
+}
+
+export function openPowerShell() {
+  return requestLocalAction('open-powershell')
+}
+
+export function openServices() {
+  return requestLocalAction('open-services')
+}
+
+export function openDeviceManager() {
+  return requestLocalAction('open-device-manager')
+}
+
 export function openPrinterMaintenance(printerName) {
   return requestLocalAction('open-printer-maintenance', { printerName })
 }
@@ -61,6 +81,81 @@ export function printTestPage(printerName) {
 
 export function getInstalledBrowsers() {
   return requestLocalGet('installed-browsers')
+}
+
+export function getNetworkStatus() {
+  return requestLocalGet('network-status')
+}
+
+export function getPrinters() {
+  return requestLocalGet('printers')
+}
+
+export function setDefaultPrinter(printerName) {
+  return requestLocalAction('set-default-printer', { printerName })
+}
+
+export function clearPrintQueue(printerName) {
+  return requestLocalAction('clear-print-queue', { printerName })
+}
+
+export function removeStuckJobs(printerName) {
+  return requestLocalAction('remove-stuck-jobs', { printerName })
+}
+
+export function restartSpooler() {
+  return requestLocalAction('restart-spooler')
+}
+
+export function getSystemInfo() {
+  return requestLocalGet('system-info')
+}
+
+export function openQuickFolder(folderKey) {
+  return requestLocalAction('open-quick-folder', { folderKey })
+}
+
+export function runSfcScan() {
+  return requestLocalAction('sfc-scan')
+}
+
+export function runDismRestoreHealth() {
+  return requestLocalAction('dism-restore-health')
+}
+
+export function runChkdskScan() {
+  return requestLocalAction('chkdsk-scan')
+}
+
+export function flushDns() {
+  return requestLocalAction('flush-dns')
+}
+
+export function resetWinsock() {
+  return requestLocalAction('reset-winsock')
+}
+
+export async function startAllRepairs() {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/run-all-repairs`, { method: 'POST' }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'No se pudo iniciar la reparación.')
+  }
+  return data.jobId
+}
+
+export function getRepairStatus(jobId) {
+  return requestLocalGet(`repair-status/${jobId}`)
+}
+
+export function isAdmin() {
+  return requestLocalGet('is-admin')
+}
+
+export function openRemoteApp(appId) {
+  return requestLocalAction('open-remote-app', { appId })
 }
 
 export async function isLocalAgentAvailable() {

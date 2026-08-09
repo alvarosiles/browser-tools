@@ -11,6 +11,11 @@ import {
   clearDomainData,
   openControlPanel,
   openWindowsSettings,
+  openTaskManager,
+  openCmdAsAdmin,
+  openPowerShell,
+  openServices,
+  openDeviceManager,
   openPrinterMaintenance,
   printTestPage,
   detectInstalledBrowsers,
@@ -19,6 +24,22 @@ import {
   openPasswordManager,
   backupAll,
   openBackupFolder,
+  getNetworkStatus,
+  listPrinters,
+  setDefaultPrinter,
+  clearPrintQueue,
+  removeStuckJobs,
+  restartSpooler,
+  getSystemInfo,
+  openQuickFolder,
+  runSfcScan,
+  runDismRestoreHealth,
+  runChkdskScan,
+  flushDns,
+  resetWinsock,
+  runAllRepairs,
+  isElevated,
+  openRemoteApp,
 } from './commands.js'
 
 const WORKER_PORT = process.env.PORT || 5177
@@ -104,16 +125,68 @@ handle('clear-browser-data', ({ browserId, types }) => clearBrowserData(browserI
 handle('clear-domain-data', ({ domain }) => clearDomainData(domain))
 handle('open-control-panel', () => openControlPanel())
 handle('open-windows-settings', () => openWindowsSettings())
+handle('open-task-manager', () => openTaskManager())
+handle('open-cmd-admin', () => openCmdAsAdmin())
+handle('open-powershell', () => openPowerShell())
+handle('open-services', () => openServices())
+handle('open-device-manager', () => openDeviceManager())
 handle('open-printer-maintenance', ({ printerName }) => openPrinterMaintenance(printerName))
 handle('print-test-page', ({ printerName }) => printTestPage(printerName))
 handle('backup-browser-profile', ({ browserId }) => backupBrowserProfile(browserId))
 handle('backup-browser-bookmarks', ({ browserId }) => backupBrowserBookmarks(browserId))
 handle('open-password-manager', ({ browserId }) => openPasswordManager(browserId))
 handle('open-backup-folder', ({ date }) => openBackupFolder(date))
+handle('set-default-printer', ({ printerName }) => setDefaultPrinter(printerName))
+handle('clear-print-queue', ({ printerName }) => clearPrintQueue(printerName))
+handle('remove-stuck-jobs', ({ printerName }) => removeStuckJobs(printerName))
+handle('restart-spooler', () => restartSpooler())
+handle('open-quick-folder', ({ folderKey }) => openQuickFolder(folderKey))
+handle('open-remote-app', ({ appId }) => openRemoteApp(appId))
+handle('sfc-scan', () => runSfcScan())
+handle('dism-restore-health', () => runDismRestoreHealth())
+handle('chkdsk-scan', () => runChkdskScan())
+handle('flush-dns', () => flushDns())
+handle('reset-winsock', () => resetWinsock())
 
 app.get('/installed-browsers', async (_req, res) => {
   try {
     const result = await detectInstalledBrowsers()
+    res.json({ ok: true, result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+app.get('/printers', async (_req, res) => {
+  try {
+    const result = await listPrinters()
+    res.json({ ok: true, result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+app.get('/system-info', async (_req, res) => {
+  try {
+    const result = await getSystemInfo()
+    res.json({ ok: true, result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+app.get('/is-admin', async (_req, res) => {
+  try {
+    const result = await isElevated()
+    res.json({ ok: true, result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+app.get('/network-status', async (_req, res) => {
+  try {
+    const result = await getNetworkStatus()
     res.json({ ok: true, result })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
@@ -149,6 +222,39 @@ app.post('/backup-all', (_req, res) => {
 
 app.get('/backup-status/:jobId', (req, res) => {
   const job = backupJobs.get(req.params.jobId)
+  if (!job) {
+    res.status(404).json({ ok: false, error: 'Job no encontrado' })
+    return
+  }
+  res.json({ ok: true, ...job })
+})
+
+// "Reparaciones automáticas" corre sfc/DISM/chkdsk, que pueden tardar varios minutos,
+// así que sigue el mismo patrón de job en segundo plano que "Respaldar Todo".
+const repairJobs = new Map()
+
+app.post('/run-all-repairs', (_req, res) => {
+  const jobId = crypto.randomUUID()
+  const job = { status: 'running', steps: [], error: null }
+  repairJobs.set(jobId, job)
+
+  runAllRepairs((steps) => {
+    job.steps = steps
+  })
+    .then(({ results }) => {
+      job.status = 'done'
+      job.steps = results
+    })
+    .catch((err) => {
+      job.status = 'error'
+      job.error = err.message
+    })
+
+  res.json({ ok: true, jobId })
+})
+
+app.get('/repair-status/:jobId', (req, res) => {
+  const job = repairJobs.get(req.params.jobId)
   if (!job) {
     res.status(404).json({ ok: false, error: 'Job no encontrado' })
     return

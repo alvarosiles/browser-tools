@@ -8,7 +8,7 @@ function App() {
   const { message, showToast } = useToast()
 
   return (
-    <div className="flex min-h-svh flex-col bg-slate-950">
+    <div className="flex min-h-svh flex-col bg-slate-50 dark:bg-slate-950">
       <Header />
       <Dashboard onNotify={showToast} />
       <Footer />
