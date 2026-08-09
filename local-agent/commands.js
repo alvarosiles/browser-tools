@@ -145,6 +145,32 @@ async function clearChromiumSitePermissions(profileDirs) {
   return patchedCount
 }
 
+// Si el navegador tiene una cuenta sincronizada (Google/Opera/Microsoft), el historial
+// borrado localmente se vuelve a descargar de la nube en cuanto se reabre — el borrado
+// de archivos por sí solo no alcanza. Por eso, al borrar "history", también se desactiva
+// el motor de sync en "Preferences" (sync.requested = false), que es lo que evita que
+// el navegador vuelva a traer los datos desde la cuenta en el próximo arranque.
+async function disableChromiumSync(profileDirs) {
+  let patchedCount = 0
+  for (const dir of profileDirs) {
+    const prefsPath = path.join(dir, 'Preferences')
+    if (!(await existingPath(prefsPath))) continue
+    try {
+      const raw = await fs.readFile(prefsPath, 'utf8')
+      const prefs = JSON.parse(raw)
+      const wasRequested = prefs.sync?.requested !== false
+      prefs.sync = { ...prefs.sync, requested: false }
+      if (wasRequested) {
+        await fs.writeFile(prefsPath, JSON.stringify(prefs))
+        patchedCount += 1
+      }
+    } catch {
+      // Preferences bloqueado o con formato inesperado: se omite en vez de arriesgar corromperlo.
+    }
+  }
+  return patchedCount
+}
+
 async function findFirefoxProfileNames() {
   const profilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
   const entries = await fs.readdir(profilesDir, { withFileTypes: true }).catch(() => [])
@@ -276,6 +302,11 @@ export async function clearBrowserData(browserId, types) {
       await rmWithRetry(`${historyPath}-journal`)
     }
     cleared.history = historyFiles
+
+    if (browserId !== 'firefox') {
+      const profileDirs = await findChromiumProfileDirs(browserId)
+      cleared.syncDisabled = await disableChromiumSync(profileDirs)
+    }
   }
 
   // "permissions" en Chromium no es una carpeta a borrar, sino una clave dentro de

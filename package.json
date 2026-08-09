@@ -4,16 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:pages": "cross-env GITHUB_PAGES=true vite build",
-    "lint": "oxlint",
-    "preview": "vite preview",
-    "agent": "npm start --prefix local-agent",
-    "agent:install": "npm install --prefix local-agent",
-    "web": "concurrently -n agent,web -c yellow,cyan \"npm run agent\" \"npm run dev\"",
-    "predeploy": "npm run build:pages",
-    "deploy": "gh-pages -d dist"
+    "web": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
+    "deploy": "cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
   },
   "dependencies": {
     "lucide-react": "^1.28.0",
