@@ -20,7 +20,8 @@ import {
   openBackupFolder,
 } from './commands.js'
 
-const PORT = process.env.PORT || 5177
+const WORKER_PORT = process.env.PORT || 5177
+const CONTROL_PORT = process.env.CONTROL_PORT || 5178
 
 // Cuando corre empaquetado como .exe (Node SEA), el botón "Instalar App" de la web solo
 // descarga este binario — la "instalación" real (copiarse a una ubicación fija y arrancar
@@ -51,6 +52,40 @@ ensureInstalled()
 const app = express()
 app.use(cors())
 app.use(express.json())
+
+// Panel de control aparte (puerto propio): siempre queda escuchando, incluso cuando el
+// botón "Stop" de la web apaga el servicio real. Así "Play" puede volver a levantarlo sin
+// necesitar reabrir el .exe manualmente — el usuario solo pausa/reanuda, no cierra la app.
+let workerServer = null
+
+function startWorker() {
+  if (workerServer) return
+  workerServer = app.listen(WORKER_PORT, '127.0.0.1', () => {
+    console.log(`IT Support Tools local agent escuchando en http://127.0.0.1:${WORKER_PORT}`)
+  })
+}
+
+function stopWorker() {
+  if (!workerServer) return
+  workerServer.close()
+  workerServer = null
+  console.log('Servicio detenido (Stop).')
+}
+
+const controlApp = express()
+controlApp.use(cors())
+controlApp.get('/status', (_req, res) => res.json({ ok: true, running: workerServer !== null }))
+controlApp.post('/start', (_req, res) => {
+  startWorker()
+  res.json({ ok: true, running: true })
+})
+controlApp.post('/stop', (_req, res) => {
+  stopWorker()
+  res.json({ ok: true, running: false })
+})
+controlApp.listen(CONTROL_PORT, '127.0.0.1', () => {
+  console.log(`Panel de control escuchando en http://127.0.0.1:${CONTROL_PORT}`)
+})
 
 function handle(action, fn) {
   app.post(`/${action}`, async (req, res) => {
@@ -121,6 +156,4 @@ app.get('/backup-status/:jobId', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`IT Support Tools local agent escuchando en http://127.0.0.1:${PORT}`)
-})
+startWorker()

@@ -1,4 +1,5 @@
 import { Wrench } from 'lucide-react'
+import ServiceToggle from './ServiceToggle'
 
 export default function Header() {
   return (
@@ -13,6 +14,7 @@ export default function Header() {
           </h1>
           <p className="text-xs text-slate-400">Panel de mantenimiento para Windows</p>
         </div>
+        <ServiceToggle />
       </div>
     </header>
   )
