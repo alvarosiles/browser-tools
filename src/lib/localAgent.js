@@ -39,6 +39,10 @@ export function clearBrowserData(browserId, types) {
   return requestLocalAction('clear-browser-data', { browserId, types })
 }
 
+export function clearDomainData(domain) {
+  return requestLocalAction('clear-domain-data', { domain })
+}
+
 export function openControlPanel() {
   return requestLocalAction('open-control-panel')
 }

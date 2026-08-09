@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { DatabaseSync } from 'node:sqlite'
 
 const execAsync = promisify(exec)
 
@@ -352,6 +353,171 @@ export async function clearBrowserData(browserId, types) {
   }
 
   return { browserId, types: validTypes, ...cleared }
+}
+
+// Acepta tanto una URL completa ("https://metabet.tv/es/") como un dominio suelto
+// ("metabet.tv") y devuelve solo el host, que es lo que realmente vive en las bases de
+// datos de cookies/historial de los navegadores.
+function normalizeDomain(input) {
+  const raw = (input || '').trim()
+  if (!raw) throw new Error('Debe indicar un dominio')
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase()
+  } catch {
+    throw new Error(`Dominio inválido: ${raw}`)
+  }
+}
+
+// A diferencia de clearBrowserData (que borra archivos/carpetas completos), esto edita
+// las bases SQLite in-place para quitar solo las filas del dominio pedido, sin tocar el
+// resto del historial/cookies de otros sitios.
+function deleteRowsLikeDomain(dbPath, statements) {
+  let db
+  try {
+    db = new DatabaseSync(dbPath)
+  } catch {
+    return 0
+  }
+  try {
+    let total = 0
+    for (const sql of statements) {
+      const result = db.prepare(sql).run()
+      total += result.changes || 0
+    }
+    return total
+  } catch {
+    return 0
+  } finally {
+    db.close()
+  }
+}
+
+async function clearChromiumDomainData(browserId, domain) {
+  const profileDirs = await findChromiumProfileDirs(browserId)
+  const like = `%${domain}%`
+  let cookiesDeleted = 0
+  let historyDeleted = 0
+  let foldersDeleted = 0
+  let permissionsPatched = 0
+
+  for (const dir of profileDirs) {
+    const cookiesPath =
+      (await existingPath(path.join(dir, 'Network', 'Cookies'))) || (await existingPath(path.join(dir, 'Cookies')))
+    if (cookiesPath) {
+      cookiesDeleted += deleteRowsLikeDomain(cookiesPath, [`DELETE FROM cookies WHERE host_key LIKE '${like}'`])
+    }
+
+    const historyPath = await existingPath(path.join(dir, 'History'))
+    if (historyPath) {
+      historyDeleted += deleteRowsLikeDomain(historyPath, [
+        `DELETE FROM visits WHERE url IN (SELECT id FROM urls WHERE url LIKE '${like}')`,
+        `DELETE FROM urls WHERE url LIKE '${like}'`,
+      ])
+    }
+
+    // IndexedDB/Local Storage guardan una carpeta por origen con el dominio en el
+    // nombre (p. ej. "https_metabet.tv_0.indexeddb.leveldb"), así que basta con
+    // borrar las que coincidan en vez de vaciar todo el navegador.
+    for (const sub of ['IndexedDB', 'Local Storage', 'Service Worker']) {
+      const subDir = path.join(dir, sub)
+      const entries = await fs.readdir(subDir, { withFileTypes: true }).catch(() => [])
+      for (const entry of entries) {
+        if (entry.name.toLowerCase().includes(domain)) {
+          await rmWithRetry(path.join(subDir, entry.name), { recursive: true })
+          foldersDeleted += 1
+        }
+      }
+    }
+
+    const prefsPath = path.join(dir, 'Preferences')
+    if (await existingPath(prefsPath)) {
+      try {
+        const raw = await fs.readFile(prefsPath, 'utf8')
+        const prefs = JSON.parse(raw)
+        const exceptions = prefs.profile?.content_settings?.exceptions
+        if (exceptions) {
+          for (const key of Object.keys(exceptions)) {
+            const map = exceptions[key]
+            for (const pattern of Object.keys(map || {})) {
+              if (pattern.toLowerCase().includes(domain)) {
+                delete map[pattern]
+                permissionsPatched += 1
+              }
+            }
+          }
+          if (permissionsPatched > 0) await fs.writeFile(prefsPath, JSON.stringify(prefs))
+        }
+      } catch {
+        // Preferences bloqueado o con formato inesperado: se omite.
+      }
+    }
+  }
+
+  return { cookiesDeleted, historyDeleted, foldersDeleted, permissionsPatched }
+}
+
+async function clearFirefoxDomainData(domain) {
+  const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+  const profileNames = await findFirefoxProfileNames()
+  const like = `%${domain}%`
+  let cookiesDeleted = 0
+  let historyDeleted = 0
+  let foldersDeleted = 0
+
+  for (const name of profileNames) {
+    const profileDir = path.join(roamingProfilesDir, name)
+
+    const placesPath = await existingPath(path.join(profileDir, 'places.sqlite'))
+    if (placesPath) {
+      historyDeleted += deleteRowsLikeDomain(placesPath, [
+        `DELETE FROM moz_historyvisits WHERE place_id IN (SELECT id FROM moz_places WHERE url LIKE '${like}')`,
+        `DELETE FROM moz_places WHERE url LIKE '${like}'`,
+      ])
+    }
+
+    const cookiesPath = await existingPath(path.join(profileDir, 'cookies.sqlite'))
+    if (cookiesPath) {
+      cookiesDeleted += deleteRowsLikeDomain(cookiesPath, [`DELETE FROM moz_cookies WHERE host LIKE '${like}'`])
+    }
+
+    // Firefox guarda IndexedDB/localStorage en storage/default/<esquema+++dominio>/.
+    const storageDir = path.join(profileDir, 'storage', 'default')
+    const entries = await fs.readdir(storageDir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      if (entry.name.toLowerCase().includes(domain)) {
+        await rmWithRetry(path.join(storageDir, entry.name), { recursive: true })
+        foldersDeleted += 1
+      }
+    }
+  }
+
+  return { cookiesDeleted, historyDeleted, foldersDeleted }
+}
+
+// Borra, en todos los navegadores instalados, solo los datos (cookies, historial,
+// IndexedDB/localStorage, permisos de sitio) que pertenecen a un dominio puntual —
+// a diferencia de clearBrowserData, que borra todo el navegador.
+export async function clearDomainData(domainInput) {
+  const domain = normalizeDomain(domainInput)
+  const results = []
+
+  for (const browserId of ALL_BROWSER_IDS) {
+    if (!(await isBrowserInstalled(browserId))) continue
+    await closeBrowser(browserId)
+    const stats =
+      browserId === 'firefox' ? await clearFirefoxDomainData(domain) : await clearChromiumDomainData(browserId, domain)
+    results.push({ browserId, ...stats })
+  }
+
+  const totalChanges = results.reduce(
+    (sum, r) => sum + r.cookiesDeleted + r.historyDeleted + r.foldersDeleted + (r.permissionsPatched || 0),
+    0
+  )
+  if (totalChanges === 0) {
+    throw new Error(`No se encontraron datos de "${domain}" en los navegadores instalados`)
+  }
+
+  return { domain, results }
 }
 
 export async function openControlPanel() {

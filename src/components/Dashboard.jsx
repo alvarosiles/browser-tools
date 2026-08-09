@@ -1,4 +1,5 @@
 import BrowserCleaner from './BrowserCleaner'
+import DomainCleaner from './DomainCleaner'
 import BrowserBackup from './BrowserBackup'
 import WindowsTools from './WindowsTools'
 import PrinterTools from './PrinterTools'
@@ -17,6 +18,9 @@ export default function Dashboard({ onNotify }) {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
         <div className="lg:col-span-2 xl:col-span-3">
           <BrowserCleaner onNotify={onNotify} />
+        </div>
+        <div className="lg:col-span-2 xl:col-span-3">
+          <DomainCleaner onNotify={onNotify} />
         </div>
         <div className="lg:col-span-2 xl:col-span-3">
           <BrowserBackup onNotify={onNotify} />

@@ -8,6 +8,7 @@ import { execSync } from 'node:child_process'
 import { isSea } from 'node:sea'
 import {
   clearBrowserData,
+  clearDomainData,
   openControlPanel,
   openWindowsSettings,
   openPrinterMaintenance,
@@ -100,6 +101,7 @@ function handle(action, fn) {
 }
 
 handle('clear-browser-data', ({ browserId, types }) => clearBrowserData(browserId, types))
+handle('clear-domain-data', ({ domain }) => clearDomainData(domain))
 handle('open-control-panel', () => openControlPanel())
 handle('open-windows-settings', () => openWindowsSettings())
 handle('open-printer-maintenance', ({ printerName }) => openPrinterMaintenance(printerName))
