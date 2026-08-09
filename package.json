@@ -1,0 +1,29 @@
+{
+  "name": "browser-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "web": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
+    "deploy": "node scripts/build-agent-exe.js && cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
+  },
+  "dependencies": {
+    "lucide-react": "^1.28.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "autoprefixer": "^10.5.4",
+    "concurrently": "^10.0.4",
+    "cross-env": "^10.1.0",
+    "gh-pages": "^6.3.0",
+    "oxlint": "^1.75.0",
+    "postcss": "^8.5.25",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.0"
+  }
+}
