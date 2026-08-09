@@ -28,8 +28,9 @@ function runPowerShell(script, options) {
 
 // Carpeta "User Data" de cada navegador basado en Chromium. Los perfiles reales viven
 // en subcarpetas variables ("Default", "Profile 1", "Profile 41", ...), nunca fijas,
-// así que hay que enumerarlas en vez de asumir un nombre. Opera es la excepción: no usa
-// subcarpetas de perfil, el archivo History vive directo en "Opera Stable".
+// así que hay que enumerarlas en vez de asumir un nombre. Opera (desde que adoptó
+// perfiles múltiples estilo Chromium) también usa "Default"/"Profile N" dentro de
+// "Opera Stable", igual que Chrome/Edge/Brave.
 const USER_DATA_DIRS = {
   chrome: path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data'),
   edge: path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data'),
@@ -37,7 +38,7 @@ const USER_DATA_DIRS = {
   opera: path.join(os.homedir(), 'AppData', 'Roaming', 'Opera Software', 'Opera Stable'),
 }
 
-const FLAT_PROFILE_BROWSERS = new Set(['opera'])
+const FLAT_PROFILE_BROWSERS = new Set()
 
 const PROCESS_NAMES = {
   chrome: 'chrome.exe',
