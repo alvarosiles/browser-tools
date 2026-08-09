@@ -22,6 +22,18 @@ async function requestLocalAction(action, payload = {}) {
   return data
 }
 
+async function requestLocalGet(path) {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/${path}`).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'La consulta falló en el servicio local.')
+  }
+  return data
+}
+
 export function clearBrowserData(browserId, types) {
   return requestLocalAction('clear-browser-data', { browserId, types })
 }
@@ -40,4 +52,48 @@ export function openPrinterMaintenance(printerName) {
 
 export function printTestPage(printerName) {
   return requestLocalAction('print-test-page', { printerName })
+}
+
+export function getInstalledBrowsers() {
+  return requestLocalGet('installed-browsers')
+}
+
+export async function isLocalAgentAvailable() {
+  try {
+    const res = await fetch(`${LOCAL_AGENT_BASE_URL}/health`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export function backupBrowserProfile(browserId) {
+  return requestLocalAction('backup-browser-profile', { browserId })
+}
+
+export function backupBrowserBookmarks(browserId) {
+  return requestLocalAction('backup-browser-bookmarks', { browserId })
+}
+
+export function openPasswordManager(browserId) {
+  return requestLocalAction('open-password-manager', { browserId })
+}
+
+export async function startBackupAll() {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/backup-all`, { method: 'POST' }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'No se pudo iniciar el respaldo.')
+  }
+  return data.jobId
+}
+
+export function getBackupStatus(jobId) {
+  return requestLocalGet(`backup-status/${jobId}`)
+}
+
+export function openBackupFolder(date) {
+  return requestLocalAction('open-backup-folder', { date })
 }

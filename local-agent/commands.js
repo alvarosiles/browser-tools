@@ -89,6 +89,13 @@ const CHROMIUM_TYPE_SUBDIRS = {
   sessionStorage: ['Session Storage'],
   indexedDB: ['IndexedDB'],
   serviceWorkers: ['Service Worker'],
+  webSQL: ['databases'],
+  cacheStorage: ['CacheStorage', path.join('Service Worker', 'CacheStorage')],
+  webAppManifest: ['Web Applications'],
+  autofillForms: ['Web Data', 'Web Data-journal'],
+  // Las suscripciones push viven dentro de la base de datos de Service Worker (no en un
+  // archivo propio), así que se limpian junto con esa carpeta.
+  push: ['Service Worker'],
 }
 // Además de por perfil, Chromium comparte estas carpetas de caché de shaders/GPU a
 // nivel de "User Data", sin depender del perfil activo.
@@ -110,6 +117,31 @@ async function findChromiumTypeDirs(browserId, types) {
   const candidates = [...new Set([...perProfile, ...shared])]
   const resolved = await Promise.all(candidates.map(existingPath))
   return resolved.filter(Boolean)
+}
+
+// Chromium no guarda los permisos de sitio (cámara, micrófono, ubicación, notificaciones,
+// etc.) en una carpeta propia: viven como una clave más dentro del JSON "Preferences",
+// compartido con el resto de la configuración del navegador. Por eso, a diferencia de los
+// demás tipos, esto no se puede resolver borrando una ruta — hay que parsear el JSON y
+// vaciar solo esa clave, dejando el resto del archivo intacto.
+async function clearChromiumSitePermissions(profileDirs) {
+  let patchedCount = 0
+  for (const dir of profileDirs) {
+    const prefsPath = path.join(dir, 'Preferences')
+    if (!(await existingPath(prefsPath))) continue
+    try {
+      const raw = await fs.readFile(prefsPath, 'utf8')
+      const prefs = JSON.parse(raw)
+      if (prefs.profile?.content_settings?.exceptions) {
+        prefs.profile.content_settings.exceptions = {}
+        await fs.writeFile(prefsPath, JSON.stringify(prefs))
+        patchedCount += 1
+      }
+    } catch {
+      // Preferences bloqueado o con formato inesperado: se omite en vez de arriesgar corromperlo.
+    }
+  }
+  return patchedCount
 }
 
 async function findFirefoxProfileNames() {
@@ -137,6 +169,10 @@ const FIREFOX_ROAMING_TYPE_SUBDIRS = {
   localStorage: ['webappsstore.sqlite', 'storage'],
   indexedDB: ['storage'],
   serviceWorkers: ['storage'],
+  cacheStorage: ['storage'],
+  autofillForms: ['formhistory.sqlite'],
+  permissions: ['permissions.sqlite', 'content-prefs.sqlite'],
+  push: ['storage'],
 }
 const FIREFOX_LOCAL_TYPE_SUBDIRS = {
   cache: ['cache2'],
@@ -212,6 +248,12 @@ export const BROWSER_DATA_TYPES = [
   'indexedDB',
   'serviceWorkers',
   'history',
+  'webSQL',
+  'cacheStorage',
+  'webAppManifest',
+  'autofillForms',
+  'permissions',
+  'push',
 ]
 
 // Borra, en una sola pasada (un solo cierre del navegador), cualquier combinación de
@@ -235,7 +277,17 @@ export async function clearBrowserData(browserId, types) {
     cleared.history = historyFiles
   }
 
-  const dataTypes = validTypes.filter((t) => t !== 'history')
+  // "permissions" en Chromium no es una carpeta a borrar, sino una clave dentro de
+  // "Preferences" que hay que editar (ver clearChromiumSitePermissions). En Firefox sí
+  // es un archivo propio (permissions.sqlite), así que ahí sigue el camino genérico.
+  if (validTypes.includes('permissions') && browserId !== 'firefox') {
+    const profileDirs = await findChromiumProfileDirs(browserId)
+    cleared.permissionsPatched = await clearChromiumSitePermissions(profileDirs)
+  }
+
+  const dataTypes = validTypes.filter(
+    (t) => t !== 'history' && !(t === 'permissions' && browserId !== 'firefox')
+  )
   if (dataTypes.length > 0) {
     const dataDirs =
       browserId === 'firefox'
@@ -247,7 +299,8 @@ export async function clearBrowserData(browserId, types) {
     cleared.dataDirs = dataDirs
   }
 
-  const totalPaths = (cleared.history?.length || 0) + (cleared.dataDirs?.length || 0)
+  const totalPaths =
+    (cleared.history?.length || 0) + (cleared.dataDirs?.length || 0) + (cleared.permissionsPatched || 0)
   if (totalPaths === 0) {
     throw new Error(`No se encontraron datos de los tipos seleccionados para ${browserId}`)
   }
