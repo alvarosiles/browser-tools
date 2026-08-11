@@ -6,8 +6,8 @@
 
 | Herramienta | Versión requerida / usada | Notas |
 |---|---|---|
-| Node.js | ≥ 22 (recomendado, ver nota) | El agente local (`local-agent`) se empaqueta como `.exe` con `esbuild target: node22`. En esta máquina hay instalada **v18.20.8** — funciona para desarrollo, pero el build de `.exe` (`build:exe`) apunta a Node 22. |
-| npm | 10.8.2 (instalada en esta máquina) | Gestor de paquetes usado en ambos `package.json` (raíz y `local-agent/`). |
+| Node.js | **22** (instalada vía `nvm`, `.nvmrc` fija `22`) | Con Node **v18** el proyecto **no arranca**: Vite 8 (vía `rolldown`) usa `util.styleText`, agregado recién en Node 20.12/21.7, y `npm run dev`/`build` fallan con `SyntaxError`. Se instaló Node 22.23.2 con `nvm` y se confirmó de punta a punta: `npm run dev` y `npm run build` OK, y `npm run web` (agente local + Vite vía `concurrently`) también OK — el agente local levantó sin errores en `127.0.0.1:5177/5178`. `concurrently` (usado en `npm run web`) exige `engines: >=22`, y el build del `.exe` del agente (`build:exe`) usa `esbuild target: node22`, así que 22 es la versión recomendada para este proyecto (20 alcanzaba para `dev`/`build`, pero no cumplía el `engines` de `concurrently`). Usa `nvm use` parado en la raíz del repo para tomar automáticamente la versión de `.nvmrc`. |
+| npm | 10.9.8 (bundlada con Node 22 vía nvm) | Gestor de paquetes usado en ambos `package.json` (raíz y `local-agent/`). |
 | JavaScript | ESM (`"type": "module"`) | Todo el código usa `import`/`export`, tanto en el frontend como en `local-agent`. |
 | JSX | React 19 | Componentes en `src/`. |
 
