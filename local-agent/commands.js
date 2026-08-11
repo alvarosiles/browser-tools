@@ -3,9 +3,11 @@ import { promisify } from 'node:util'
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs/promises'
-import { DatabaseSync } from 'node:sqlite'
+import Database from 'better-sqlite3'
 
 const execAsync = promisify(exec)
+const IS_WINDOWS = process.platform === 'win32'
+const IS_LINUX = process.platform === 'linux'
 
 function run(command, { timeout } = {}) {
   return execAsync(command, { windowsHide: true, timeout }).catch((err) => {
@@ -33,20 +35,20 @@ function runPowerShell(script, options) {
 // perfiles múltiples estilo Chromium) también usa "Default"/"Profile N" dentro de
 // "Opera Stable", igual que Chrome/Edge/Brave.
 const USER_DATA_DIRS = {
-  chrome: path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data'),
-  edge: path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data'),
-  brave: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
-  opera: path.join(os.homedir(), 'AppData', 'Roaming', 'Opera Software', 'Opera Stable'),
+  chrome: IS_LINUX ? path.join(os.homedir(), '.config', 'google-chrome') : path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data'),
+  edge: IS_LINUX ? path.join(os.homedir(), '.config', 'microsoft-edge') : path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data'),
+  brave: IS_LINUX ? path.join(os.homedir(), '.config', 'BraveSoftware', 'Brave-Browser') : path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
+  opera: IS_LINUX ? path.join(os.homedir(), '.config', 'opera') : path.join(os.homedir(), 'AppData', 'Roaming', 'Opera Software', 'Opera Stable'),
 }
 
 const FLAT_PROFILE_BROWSERS = new Set()
 
 const PROCESS_NAMES = {
-  chrome: 'chrome.exe',
-  edge: 'msedge.exe',
-  firefox: 'firefox.exe',
-  brave: 'brave.exe',
-  opera: 'opera.exe',
+  chrome: IS_WINDOWS ? 'chrome.exe' : 'chrome',
+  edge: IS_WINDOWS ? 'msedge.exe' : 'msedge',
+  firefox: IS_WINDOWS ? 'firefox.exe' : 'firefox',
+  brave: IS_WINDOWS ? 'brave.exe' : 'brave',
+  opera: IS_WINDOWS ? 'opera.exe' : 'opera',
 }
 
 // Carpetas de perfil reales de un navegador Chromium (o la carpeta base si es "plano" como Opera).
@@ -173,13 +175,13 @@ async function disableChromiumSync(profileDirs) {
 }
 
 async function findFirefoxProfileNames() {
-  const profilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+  const profilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
   const entries = await fs.readdir(profilesDir, { withFileTypes: true }).catch(() => [])
   return entries.filter((e) => e.isDirectory()).map((e) => e.name)
 }
 
 async function findFirefoxHistoryFiles() {
-  const profilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+  const profilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
   const profileNames = await findFirefoxProfileNames()
   const paths = await Promise.all(
     profileNames.map((name) => existingPath(path.join(profilesDir, name, 'places.sqlite')))
@@ -207,8 +209,8 @@ const FIREFOX_LOCAL_TYPE_SUBDIRS = {
 }
 
 async function findFirefoxTypeDirs(types) {
-  const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-  const localProfilesDir = path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles')
+  const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+  const localProfilesDir = IS_LINUX ? path.join(os.homedir(), '.cache', 'mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles')
   const profileNames = await findFirefoxProfileNames()
 
   const roaming = profileNames.flatMap((name) =>
@@ -244,6 +246,10 @@ async function rmWithRetry(targetPath, { retries = 5, delayMs = 400, recursive =
 }
 
 async function isProcessRunning(processName) {
+  if (!IS_WINDOWS) {
+    const { stdout } = await execAsync(`pgrep -x ${processName}`).catch(() => ({ stdout: '' }))
+    return Boolean(stdout.trim())
+  }
   const { stdout } = await execAsync(`tasklist /FI "IMAGENAME eq ${processName}"`).catch(() => ({
     stdout: '',
   }))
@@ -258,7 +264,7 @@ async function closeBrowser(browserId, { retries = 8, delayMs = 400 } = {}) {
   if (!processName) throw new Error(`Navegador no soportado: ${browserId}`)
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
-    await run(`taskkill /IM ${processName} /F`).catch(() => {})
+    await run(IS_WINDOWS ? `taskkill /IM ${processName} /F` : `pkill -TERM -x ${processName}`).catch(() => {})
     await wait(delayMs)
     if (!(await isProcessRunning(processName))) return
   }
@@ -316,7 +322,7 @@ export async function clearBrowserData(browserId, types) {
       }
     } else {
       const profileNames = await findFirefoxProfileNames()
-      const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+      const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
       for (const name of profileNames) {
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore-backups'), { recursive: true })
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore.jsonlz4'))
@@ -374,7 +380,7 @@ function normalizeDomain(input) {
 function deleteRowsLikeDomain(dbPath, statements) {
   let db
   try {
-    db = new DatabaseSync(dbPath)
+    db = new Database(dbPath)
   } catch {
     return 0
   }
@@ -457,7 +463,7 @@ async function clearChromiumDomainData(browserId, domain) {
 }
 
 async function clearFirefoxDomainData(domain) {
-  const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+  const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
   const profileNames = await findFirefoxProfileNames()
   const like = `%${domain}%`
   let cookiesDeleted = 0
@@ -521,38 +527,40 @@ export async function clearDomainData(domainInput) {
 }
 
 export async function openControlPanel() {
-  await run('start "" control.exe')
+  await run(IS_WINDOWS ? 'start "" control.exe' : 'xdg-open .')
 }
 
 export async function openWindowsSettings() {
-  await run('start ms-settings:')
+  await run(IS_WINDOWS ? 'start ms-settings:' : 'gnome-control-center')
 }
 
 export async function openTaskManager() {
-  await run('start "" taskmgr.exe')
+  await run(IS_WINDOWS ? 'start "" taskmgr.exe' : 'gnome-system-monitor')
 }
 
 // El propio agente puede no estar corriendo elevado, pero Start-Process -Verb RunAs
 // dispara el UAC solo para esta ventana de CMD puntual, sin necesitar que el servicio
 // local entero esté elevado.
 export async function openCmdAsAdmin() {
-  await runPowerShell('Start-Process cmd.exe -Verb RunAs')
+  await run(IS_WINDOWS ? 'powershell -NoProfile -Command "Start-Process cmd.exe -Verb RunAs"' : 'x-terminal-emulator')
 }
 
 export async function openPowerShell() {
-  await run('start "" powershell.exe')
+  await run(IS_WINDOWS ? 'start "" powershell.exe' : 'x-terminal-emulator')
 }
 
 export async function openServices() {
-  await run('start "" services.msc')
+  await run(IS_WINDOWS ? 'start "" services.msc' : 'systemctl --no-pager list-units --type=service')
 }
 
 export async function openDeviceManager() {
-  await run('start "" devmgmt.msc')
+  await run(IS_WINDOWS ? 'start "" devmgmt.msc' : 'gnome-disks')
 }
 
 export async function openPrinterMaintenance(printerName) {
-  if (printerName) {
+  if (!IS_WINDOWS) {
+    await run('system-config-printer').catch(() => run('xdg-open printers:///'))
+  } else if (printerName) {
     await run(`start "" rundll32 printui.dll,PrintUIEntry /p /n "${printerName}"`)
   } else {
     await run('start "" control.exe /name Microsoft.DevicesAndPrinters')
@@ -561,6 +569,10 @@ export async function openPrinterMaintenance(printerName) {
 
 export async function printTestPage(printerName) {
   if (!printerName) throw new Error('Debe indicar el nombre de la impresora')
+  if (!IS_WINDOWS) {
+    await run(`lp -d "${printerName.replace(/"/g, '\\"')}" /usr/share/cups/data/testprint`)
+    return {}
+  }
   const escaped = printerName.replace(/'/g, "''")
 
   // Las impresoras que "imprimen a archivo" (Microsoft Print to PDF, o cualquier
@@ -620,7 +632,9 @@ if (-not $printer) {
 // Respaldo de navegadores
 // ---------------------------------------------------------------------------
 
-const BACKUP_ROOT = 'C:\\ITSupport\\Backups'
+const BACKUP_ROOT = IS_WINDOWS
+  ? 'C:\\ITSupport\\Backups'
+  : path.join(os.homedir(), 'ITSupport', 'Backups')
 
 const BROWSER_LABELS = {
   chrome: 'Chrome',
@@ -658,6 +672,7 @@ export async function detectInstalledBrowsers() {
 // robocopy usa códigos de salida en forma de bitmap: 0-7 son distintos grados de éxito
 // (archivos copiados, algunos ya iguales, etc.), solo 8+ indica un fallo real.
 function runRobocopy(src, dest, excludeDirs = []) {
+  if (!IS_WINDOWS) return fs.cp(src, dest, { recursive: true, force: true })
   const excludeArgs = excludeDirs.length
     ? `/XD ${excludeDirs.map((d) => `"${d}"`).join(' ')}`
     : ''
@@ -715,7 +730,7 @@ export async function backupBrowserProfile(browserId) {
   await fs.mkdir(destDir, { recursive: true })
 
   if (browserId === 'firefox') {
-    const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+    const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
     const profileNames = await findFirefoxProfileNames()
     for (const name of profileNames) {
       await runRobocopy(path.join(roamingProfilesDir, name), path.join(destDir, name), [
@@ -748,7 +763,7 @@ export async function backupBrowserBookmarks(browserId) {
   const savedFiles = []
 
   if (browserId === 'firefox') {
-    const roamingProfilesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+    const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
     const profileNames = await findFirefoxProfileNames()
     for (const name of profileNames) {
       const src = await existingPath(path.join(roamingProfilesDir, name, 'places.sqlite'))
@@ -780,11 +795,11 @@ export async function backupBrowserBookmarks(browserId) {
 // estándar de localizar el binario real de una app instalada sin asumir una ruta fija
 // (varía entre instalación por usuario, por máquina, x86/x64, versión, etc.).
 const APP_PATH_EXE = {
-  chrome: 'chrome.exe',
-  edge: 'msedge.exe',
-  firefox: 'firefox.exe',
-  brave: 'brave.exe',
-  opera: 'opera.exe',
+  chrome: IS_LINUX ? 'google-chrome' : 'chrome.exe',
+  edge: IS_LINUX ? 'microsoft-edge' : 'msedge.exe',
+  firefox: 'firefox',
+  brave: IS_LINUX ? 'brave-browser' : 'brave.exe',
+  opera: IS_LINUX ? 'opera' : 'opera.exe',
 }
 
 const PASSWORD_MANAGER_URLS = {
@@ -796,6 +811,7 @@ const PASSWORD_MANAGER_URLS = {
 }
 
 async function findBrowserExecutable(browserId) {
+  if (!IS_WINDOWS) return APP_PATH_EXE[browserId]
   const exeName = APP_PATH_EXE[browserId]
   const script = `
 foreach ($hive in @('HKCU:', 'HKLM:', 'HKLM:\\SOFTWARE\\WOW6432Node')) {
@@ -824,7 +840,9 @@ export async function openPasswordManager(browserId) {
     throw new Error(`No se encontró el ejecutable de ${BROWSER_LABELS[browserId]}.`)
   }
 
-  await run(`start "" "${exePath}" "${PASSWORD_MANAGER_URLS[browserId]}"`)
+  await run(IS_WINDOWS
+    ? `start "" "${exePath}" "${PASSWORD_MANAGER_URLS[browserId]}"`
+    : `${exePath} "${PASSWORD_MANAGER_URLS[browserId]}"`)
   return {
     browserId,
     notice:
@@ -864,7 +882,7 @@ export async function backupAll(onProgress) {
 export async function openBackupFolder(date) {
   const dir = path.join(BACKUP_ROOT, date || todayFolderName())
   await fs.mkdir(dir, { recursive: true })
-  await run(`start "" explorer "${dir}"`)
+  await run(IS_WINDOWS ? `start "" explorer "${dir}"` : `xdg-open "${dir}"`)
   return { dir }
 }
 
@@ -908,6 +926,13 @@ async function runNetsh(args) {
 }
 
 async function getActiveWifiInfo() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('nmcli -t -f active,ssid,signal,band dev wifi').catch(() => ({ stdout: '' }))
+    const row = stdout.split(/\r?\n/).find((line) => line.startsWith('yes:'))
+    if (!row) return {}
+    const [, ssid, signal, radioType] = row.split(':')
+    return { ssid, signal: signal ? `${signal}%` : null, radioType, state: 'connected' }
+  }
   const { stdout } = await runNetsh('wlan show interfaces').catch(() => ({ stdout: '' }))
   const info = {}
   for (const line of stdout.split(/\r?\n/)) {
@@ -927,6 +952,14 @@ async function getActiveWifiInfo() {
 // consulta ("show profile <ssid> key=clear") para revelar la contraseña en texto plano,
 // ya que "show profiles" solo lista los nombres.
 async function getSavedWifiNetworks() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('nmcli -t -f NAME,TYPE connection show').catch(() => ({ stdout: '' }))
+    return stdout.split(/\r?\n/).filter(Boolean).filter((line) => line.endsWith(':802-11-wireless')).map((line) => ({
+      ssid: line.slice(0, line.lastIndexOf(':')),
+      password: null,
+      authentication: null,
+    }))
+  }
   const { stdout } = await runNetsh('wlan show profiles').catch(() => ({ stdout: '' }))
   const names = []
   for (const line of stdout.split(/\r?\n/)) {
@@ -958,6 +991,15 @@ async function getSavedWifiNetworks() {
 // ---------------------------------------------------------------------------
 
 export async function listPrinters() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('lpstat -p -d').catch(() => ({ stdout: '' }))
+    const defaultMatch = stdout.match(/system default destination: (.+)/)
+    return stdout.split(/\r?\n/).filter((line) => line.startsWith('printer ')).map((line) => {
+      const match = line.match(/^printer (\S+) (.+)$/)
+      const name = match?.[1] || line.slice(8)
+      return { Name: name, Status: match?.[2] || 'unknown', Default: name === defaultMatch?.[1], PortName: null, JobCount: 0 }
+    })
+  }
   const script = `
 Get-Printer | ForEach-Object {
   $jobCount = (Get-PrintJob -PrinterName $_.Name -ErrorAction SilentlyContinue | Measure-Object).Count
@@ -979,6 +1021,10 @@ Get-Printer | ForEach-Object {
 
 export async function setDefaultPrinter(printerName) {
   if (!printerName) throw new Error('Debe indicar el nombre de la impresora')
+  if (!IS_WINDOWS) {
+    await run(`lpadmin -d "${printerName.replace(/"/g, '\\"')}"`)
+    return { printerName }
+  }
   const escaped = printerName.replace(/'/g, "''")
   const script = `
 $printer = Get-CimInstance -ClassName Win32_Printer -Filter "Name='${escaped}'" -ErrorAction SilentlyContinue
@@ -999,6 +1045,10 @@ Write-Output "OK"
 // se borran los archivos de spool pendientes y se reinicia, igual que hace el truco
 // manual habitual de soporte técnico.
 export async function clearPrintQueue(printerName) {
+  if (!IS_WINDOWS) {
+    await run(printerName ? `cancel -a "${printerName.replace(/"/g, '\\"')}"` : 'cancel -a')
+    return { printerName: printerName || null }
+  }
   await run('net stop spooler').catch(() => {})
   const spoolDir = 'C:\\Windows\\System32\\spool\\PRINTERS'
   await run(`del /f /q "${spoolDir}\\*.*"`).catch(() => {})
@@ -1008,6 +1058,11 @@ export async function clearPrintQueue(printerName) {
 
 export async function removeStuckJobs(printerName) {
   if (!printerName) throw new Error('Debe indicar el nombre de la impresora')
+  if (!IS_WINDOWS) {
+    const { stdout } = await run(`lpstat -o "${printerName.replace(/"/g, '\\"')}"`).catch(() => ({ stdout: '' }))
+    await run(`cancel -a "${printerName.replace(/"/g, '\\"')}"`).catch(() => {})
+    return { printerName, removed: stdout.split(/\r?\n/).filter(Boolean).length }
+  }
   const escaped = printerName.replace(/'/g, "''")
   const script = `
 $jobs = Get-PrintJob -PrinterName '${escaped}' -ErrorAction SilentlyContinue
@@ -1021,6 +1076,10 @@ Write-Output $count
 }
 
 export async function restartSpooler() {
+  if (!IS_WINDOWS) {
+    await run('systemctl restart cups')
+    return {}
+  }
   await run('net stop spooler')
   await run('net start spooler')
   return {}
@@ -1039,6 +1098,7 @@ function formatBytes(bytes) {
 // os.*, así que se consultan con CIM/WMI en una sola llamada a PowerShell para evitar
 // levantar el intérprete varias veces.
 async function getWmiSystemInfo() {
+  if (!IS_WINDOWS) return {}
   const script = `
 $cpu = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
 $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
@@ -1096,6 +1156,7 @@ export async function getSystemInfo() {
     null
   const totalMem = os.totalmem()
   const freeMem = os.freemem()
+  const diskStats = await fs.statfs(os.homedir()).catch(() => null)
 
   return {
     computerName: os.hostname(),
@@ -1104,8 +1165,8 @@ export async function getSystemInfo() {
     ramTotal: formatBytes(totalMem),
     ramUsed: formatBytes(totalMem - freeMem),
     cpu: wmi.CpuName || os.cpus()[0]?.model || null,
-    diskFree: wmi.DiskFreeBytes != null ? formatBytes(wmi.DiskFreeBytes) : null,
-    diskTotal: wmi.DiskTotalBytes != null ? formatBytes(wmi.DiskTotalBytes) : null,
+    diskFree: wmi.DiskFreeBytes != null ? formatBytes(wmi.DiskFreeBytes) : diskStats ? formatBytes(diskStats.bavail * diskStats.bsize) : null,
+    diskTotal: wmi.DiskTotalBytes != null ? formatBytes(wmi.DiskTotalBytes) : diskStats ? formatBytes(diskStats.blocks * diskStats.bsize) : null,
     localIp,
     publicIp,
     domain: wmi.PartOfDomain ? wmi.Domain : wmi.Workgroup || null,
@@ -1134,13 +1195,10 @@ export async function getNetworkStatus() {
 // que queda en AppData en vez de Program Files.
 const REMOTE_APP_PATHS = {
   teamviewer: [
-    'C:\\Program Files\\TeamViewer\\TeamViewer.exe',
-    'C:\\Program Files (x86)\\TeamViewer\\TeamViewer.exe',
+    ...(IS_LINUX ? ['/usr/bin/teamviewer', '/opt/teamviewer/tv_bin/TeamViewer'] : ['C:\\Program Files\\TeamViewer\\TeamViewer.exe', 'C:\\Program Files (x86)\\TeamViewer\\TeamViewer.exe']),
   ],
   anydesk: [
-    'C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe',
-    'C:\\Program Files\\AnyDesk\\AnyDesk.exe',
-    path.join(os.homedir(), 'AppData', 'Local', 'AnyDesk', 'AnyDesk.exe'),
+    ...(IS_LINUX ? ['/usr/bin/anydesk'] : ['C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe', 'C:\\Program Files\\AnyDesk\\AnyDesk.exe', path.join(os.homedir(), 'AppData', 'Local', 'AnyDesk', 'AnyDesk.exe')]),
   ],
 }
 
@@ -1156,7 +1214,7 @@ export async function openRemoteApp(appId) {
   for (const candidate of candidates) {
     const found = await existingPath(candidate)
     if (found) {
-      await run(`start "" "${found}"`)
+      await run(IS_WINDOWS ? `start "" "${found}"` : `"${found}"`)
       return { appId, path: found }
     }
   }
@@ -1168,6 +1226,13 @@ export async function openRemoteApp(appId) {
 // (falla con "Acceso denegado" en cualquier otro caso) — es el truco estándar para
 // detectar elevación sin depender de módulos nativos adicionales.
 export async function isElevated() {
+  if (!IS_WINDOWS) {
+    try {
+      return os.userInfo().uid === 0
+    } catch {
+      return false
+    }
+  }
   try {
     await run('net session')
     return true
@@ -1185,9 +1250,10 @@ export async function isElevated() {
 const QUICK_FOLDERS = {
   downloads: () => path.join(os.homedir(), 'Downloads'),
   temp: () => os.tmpdir(),
-  appdata: () => process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-  startup: () =>
-    path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'),
+  appdata: () => process.env.APPDATA || process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
+  startup: () => IS_WINDOWS
+    ? path.join(os.homedir(), 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    : path.join(os.homedir(), '.config', 'autostart'),
 }
 
 export async function openQuickFolder(folderKey) {
@@ -1195,7 +1261,7 @@ export async function openQuickFolder(folderKey) {
   if (!resolver) throw new Error(`Carpeta no soportada: ${folderKey}`)
   const dir = resolver()
   await fs.mkdir(dir, { recursive: true })
-  await run(`start "" explorer "${dir}"`)
+  await run(IS_WINDOWS ? `start "" explorer "${dir}"` : `xdg-open "${dir}"`)
   return { folderKey, dir }
 }
 
@@ -1207,11 +1273,13 @@ export async function openQuickFolder(folderKey) {
 // se les pone timeout (a diferencia del resto de comandos): se prefiere esperar a que
 // terminen en vez de cortarlos a mitad de un escaneo del sistema de archivos.
 export async function runSfcScan() {
+  if (!IS_WINDOWS) return { output: (await run('sudo -n journalctl -p err -b --no-pager').catch((err) => ({ stdout: err.stdout || err.message }))).stdout }
   const { stdout } = await run('sfc /scannow')
   return { output: stdout }
 }
 
 export async function runDismRestoreHealth() {
+  if (!IS_WINDOWS) return { output: (await run('sudo -n apt-get check').catch((err) => ({ stdout: err.stdout || err.message }))).stdout }
   const { stdout } = await run('DISM /Online /Cleanup-Image /RestoreHealth')
   return { output: stdout }
 }
@@ -1220,12 +1288,20 @@ export async function runDismRestoreHealth() {
 // reinicio, a diferencia de "/f" (que sí requiere bloquear la unidad del sistema y
 // reiniciar). Es lo que corresponde a un botón de un clic sin interrumpir al usuario.
 export async function runChkdskScan() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('df -h /')
+    return { output: stdout }
+  }
   const drive = process.env.SystemDrive || 'C:'
   const { stdout } = await run(`chkdsk ${drive} /scan`)
   return { output: stdout }
 }
 
 export async function flushDns() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('resolvectl flush-caches').catch(() => ({ stdout: 'El sistema no expone resolvectl.' }))
+    return { output: stdout }
+  }
   const { stdout } = await run('ipconfig /flushdns')
   return { output: stdout }
 }
@@ -1233,6 +1309,10 @@ export async function flushDns() {
 // Reinicia el stack Winsock a su estado por defecto (corrige "sin acceso a Internet"
 // causado por LSPs corruptos). El cambio requiere reiniciar el equipo para completarse.
 export async function resetWinsock() {
+  if (!IS_WINDOWS) {
+    const { stdout } = await run('systemctl restart NetworkManager').catch((err) => ({ stdout: err.stdout || err.message }))
+    return { output: stdout, requiresRestart: false }
+  }
   const { stdout } = await run('netsh winsock reset')
   return { output: stdout, requiresRestart: true }
 }

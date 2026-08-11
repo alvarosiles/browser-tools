@@ -1,13 +1,15 @@
 # IT Support Tools — Local Agent
 
-Servicio local en Node.js/Express que recibe peticiones desde el panel web [IT Support Tools](../README.md) y ejecuta las acciones reales en Windows: abrir el Panel de Control, la Configuración, gestionar impresoras y borrar el historial de navegadores.
+Servicio local en Node.js/Express que recibe peticiones desde el panel web [IT Support Tools](../README.md) y ejecuta acciones del sistema. Funciona en Windows y Linux: usa PowerShell/CIM en Windows y herramientas nativas como CUPS, `nmcli`, `systemctl` y `xdg-open` en Linux.
 
 Escucha únicamente en `127.0.0.1:5177` (no expuesto a la red).
 
 ## Requisitos
 
-- Windows.
+- Windows o Linux.
 - Node.js.
+
+En Linux, para las funciones de impresoras instala CUPS (`cups`, `cups-client`) y, para el estado Wi-Fi, NetworkManager (`nmcli`). Algunas acciones requieren permisos de administrador.
 
 ## Instalación y ejecución
 

@@ -1,6 +1,6 @@
 # IT Support Tools
 
-Panel de herramientas de soporte técnico para Windows. Interfaz web (React + Vite + Tailwind CSS) con tema oscuro, pensada para conectarse en el futuro con una aplicación de escritorio (agente local) que ejecute las acciones reales sobre el sistema.
+Panel de herramientas de soporte técnico para Windows y Linux. Interfaz web (React + Vite + Tailwind CSS) conectada a un agente local que ejecuta las acciones reales sobre el sistema.
 
 ## Módulos
 

@@ -6,10 +6,10 @@ export const translations = {
   es: {
     header: {
       title: 'IT Support Tools',
-      subtitle: 'Panel de mantenimiento para Windows',
+      subtitle: 'Panel de mantenimiento para Windows y Linux',
     },
     footer: {
-      text: 'IT Support Tools - Panel de Mantenimiento para Windows',
+      text: 'IT Support Tools - Panel de Mantenimiento para Windows y Linux',
     },
     service: {
       start: 'Iniciar el servicio local',
@@ -22,7 +22,7 @@ export const translations = {
       stoppedBody: 'Lo pausaste con el botón del encabezado. Presiona "Servicio detenido" (arriba) para reactivarlo.',
       missingTitle: 'Servicio local no detectado',
       missingBody:
-        'Las acciones de esta página necesitan el servicio local corriendo en esta PC. Descarga e instala la app (una sola vez, se abre sola en cada inicio de Windows) o, si ya la tienes, revisa que esté corriendo.',
+        'Las acciones de esta página necesitan el servicio local corriendo en esta PC. Instala las dependencias del agente y ejecútalo con npm start dentro de local-agent.',
       installButton: 'Instalar App',
     },
     settings: {
@@ -35,7 +35,7 @@ export const translations = {
     },
     dashboard: {
       title: 'Panel de Herramientas',
-      subtitle: 'Acciones rápidas de soporte técnico para equipos Windows',
+      subtitle: 'Acciones rápidas de soporte técnico para equipos Windows y Linux',
     },
     browserCleaner: {
       title: 'Borrar Historial de Navegadores',

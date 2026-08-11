@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs'
 import { execSync } from 'node:child_process'
-import { isSea } from 'node:sea'
+import { createRequire } from 'node:module'
 import {
   clearBrowserData,
   clearDomainData,
@@ -42,6 +42,14 @@ import {
   openRemoteApp,
 } from './commands.js'
 
+const require = createRequire(import.meta.url)
+let isSea = () => false
+try {
+  isSea = require('node:sea').isSea
+} catch {
+  // node:sea solo está disponible en versiones recientes de Node.js.
+}
+
 const WORKER_PORT = process.env.PORT || 5177
 const CONTROL_PORT = process.env.CONTROL_PORT || 5178
 
@@ -50,7 +58,7 @@ const CONTROL_PORT = process.env.CONTROL_PORT || 5178
 // junto con Windows) la hace el propio .exe la primera vez que se ejecuta. Así el usuario
 // no depende de tener Node.js instalado ni de correr comandos por consola.
 function ensureInstalled() {
-  if (!isSea()) return
+  if (!isSea() || process.platform !== 'win32') return
   try {
     const installDir = path.join(os.homedir(), 'AppData', 'Local', 'BrowserToolsAgent')
     const installPath = path.join(installDir, 'BrowserToolsAgent.exe')
