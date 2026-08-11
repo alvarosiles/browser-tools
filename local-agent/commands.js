@@ -43,12 +43,19 @@ const USER_DATA_DIRS = {
 
 const FLAT_PROFILE_BROWSERS = new Set()
 
+// GNOME Web (Epiphany) es exclusivo de Linux y, a diferencia de Chromium, separa datos
+// (~/.local/share) de caché (~/.cache) siguiendo XDG, con un único perfil por defecto
+// (sin subcarpetas "Default"/"Profile N").
+const EPIPHANY_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'epiphany')
+const EPIPHANY_CACHE_DIR = path.join(os.homedir(), '.cache', 'epiphany')
+
 const PROCESS_NAMES = {
   chrome: IS_WINDOWS ? 'chrome.exe' : 'chrome',
   edge: IS_WINDOWS ? 'msedge.exe' : 'msedge',
   firefox: IS_WINDOWS ? 'firefox.exe' : 'firefox',
   brave: IS_WINDOWS ? 'brave.exe' : 'brave',
   opera: IS_WINDOWS ? 'opera.exe' : 'opera',
+  epiphany: 'epiphany',
 }
 
 // Carpetas de perfil reales de un navegador Chromium (o la carpeta base si es "plano" como Opera).
@@ -229,6 +236,35 @@ async function findFirefoxTypeDirs(types) {
   return resolved.filter(Boolean)
 }
 
+async function findEpiphanyHistoryFiles() {
+  const base = path.join(EPIPHANY_DATA_DIR, 'ephy-history.db')
+  const paths = await Promise.all([existingPath(base), existingPath(`${base}-wal`), existingPath(`${base}-shm`)])
+  return paths.filter(Boolean)
+}
+
+// WebKitGTK, a diferencia de Chromium, no separa IndexedDB/localStorage/Service Workers
+// en carpetas propias: todo vive junto en "storage" (identificado por origen con nombres
+// hasheados, no por dominio legible), igual que Firefox unifica esos tres tipos.
+const EPIPHANY_DATA_TYPE_SUBDIRS = {
+  cookies: ['cookies.sqlite', 'cookies.sqlite-wal', 'cookies.sqlite-shm'],
+  localStorage: ['storage'],
+  indexedDB: ['storage'],
+  sessionStorage: ['storage'],
+  serviceWorkers: ['storage'],
+}
+const EPIPHANY_CACHE_TYPE_SUBDIRS = {
+  cache: ['WebKitCache'],
+  cacheStorage: ['CacheStorage'],
+}
+
+async function findEpiphanyTypeDirs(types) {
+  const dataPaths = types.flatMap((type) => (EPIPHANY_DATA_TYPE_SUBDIRS[type] || []).map((sub) => path.join(EPIPHANY_DATA_DIR, sub)))
+  const cachePaths = types.flatMap((type) => (EPIPHANY_CACHE_TYPE_SUBDIRS[type] || []).map((sub) => path.join(EPIPHANY_CACHE_DIR, sub)))
+  const candidates = [...new Set([...dataPaths, ...cachePaths])]
+  const resolved = await Promise.all(candidates.map(existingPath))
+  return resolved.filter(Boolean)
+}
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Tras taskkill, Windows puede tardar un instante en liberar el handle del archivo
@@ -303,7 +339,11 @@ export async function clearBrowserData(browserId, types) {
 
   if (validTypes.includes('history')) {
     const historyFiles =
-      browserId === 'firefox' ? await findFirefoxHistoryFiles() : await findChromiumHistoryFiles(browserId)
+      browserId === 'firefox'
+        ? await findFirefoxHistoryFiles()
+        : browserId === 'epiphany'
+          ? await findEpiphanyHistoryFiles()
+          : await findChromiumHistoryFiles(browserId)
     for (const historyPath of historyFiles) {
       await rmWithRetry(historyPath)
       await rmWithRetry(`${historyPath}-journal`)
@@ -314,7 +354,11 @@ export async function clearBrowserData(browserId, types) {
     // carpeta "Sessions" del perfil — Chromium la usa para reabrir pestañas/ventanas
     // cerradas recientemente. Si no se borra, sigue mostrando páginas "viejas" aunque
     // el historial de navegación ya esté limpio.
-    if (browserId !== 'firefox') {
+    if (browserId === 'epiphany') {
+      const sessionFile = path.join(EPIPHANY_DATA_DIR, 'session_state.xml')
+      await rmWithRetry(sessionFile)
+      await rmWithRetry(`${sessionFile}~`)
+    } else if (browserId !== 'firefox') {
       const profileDirs = await findChromiumProfileDirs(browserId)
       cleared.syncDisabled = await disableChromiumSync(profileDirs)
       for (const dir of profileDirs) {
@@ -345,7 +389,9 @@ export async function clearBrowserData(browserId, types) {
     const dataDirs =
       browserId === 'firefox'
         ? await findFirefoxTypeDirs(dataTypes)
-        : await findChromiumTypeDirs(browserId, dataTypes)
+        : browserId === 'epiphany'
+          ? await findEpiphanyTypeDirs(dataTypes)
+          : await findChromiumTypeDirs(browserId, dataTypes)
     for (const dir of dataDirs) {
       await rmWithRetry(dir, { recursive: true })
     }
@@ -500,6 +546,32 @@ async function clearFirefoxDomainData(domain) {
   return { cookiesDeleted, historyDeleted, foldersDeleted }
 }
 
+// El esquema de cookies.sqlite y de ephy-history.db (hosts -> urls -> visits, con "hosts"
+// guardando la URL base del sitio) hace que el borrado por dominio sea análogo al de
+// Firefox. Las carpetas de "storage" de WebKitGTK usan nombres hasheados por origen (no
+// el dominio en texto plano), así que no se pueden filtrar por dominio como en Chromium.
+async function clearEpiphanyDomainData(domain) {
+  const like = `%${domain}%`
+  let cookiesDeleted = 0
+  let historyDeleted = 0
+
+  const cookiesPath = await existingPath(path.join(EPIPHANY_DATA_DIR, 'cookies.sqlite'))
+  if (cookiesPath) {
+    cookiesDeleted += deleteRowsLikeDomain(cookiesPath, [`DELETE FROM moz_cookies WHERE host LIKE '${like}'`])
+  }
+
+  const historyPath = await existingPath(path.join(EPIPHANY_DATA_DIR, 'ephy-history.db'))
+  if (historyPath) {
+    historyDeleted += deleteRowsLikeDomain(historyPath, [
+      `DELETE FROM visits WHERE url IN (SELECT id FROM urls WHERE url LIKE '${like}')`,
+      `DELETE FROM urls WHERE url LIKE '${like}'`,
+      `DELETE FROM hosts WHERE url LIKE '${like}'`,
+    ])
+  }
+
+  return { cookiesDeleted, historyDeleted, foldersDeleted: 0 }
+}
+
 // Borra, en todos los navegadores instalados, solo los datos (cookies, historial,
 // IndexedDB/localStorage, permisos de sitio) que pertenecen a un dominio puntual —
 // a diferencia de clearBrowserData, que borra todo el navegador.
@@ -511,7 +583,11 @@ export async function clearDomainData(domainInput) {
     if (!(await isBrowserInstalled(browserId))) continue
     await closeBrowser(browserId)
     const stats =
-      browserId === 'firefox' ? await clearFirefoxDomainData(domain) : await clearChromiumDomainData(browserId, domain)
+      browserId === 'firefox'
+        ? await clearFirefoxDomainData(domain)
+        : browserId === 'epiphany'
+          ? await clearEpiphanyDomainData(domain)
+          : await clearChromiumDomainData(browserId, domain)
     results.push({ browserId, ...stats })
   }
 
@@ -642,9 +718,10 @@ const BROWSER_LABELS = {
   firefox: 'Firefox',
   brave: 'Brave',
   opera: 'Opera',
+  epiphany: 'GNOME Web',
 }
 
-const ALL_BROWSER_IDS = ['chrome', 'edge', 'firefox', 'brave', 'opera']
+const ALL_BROWSER_IDS = ['chrome', 'edge', 'firefox', 'brave', 'opera', 'epiphany']
 
 function todayFolderName() {
   const now = new Date()
@@ -656,6 +733,9 @@ export async function isBrowserInstalled(browserId) {
   if (browserId === 'firefox') {
     const names = await findFirefoxProfileNames()
     return names.length > 0
+  }
+  if (browserId === 'epiphany') {
+    return IS_LINUX && Boolean(await existingPath(EPIPHANY_DATA_DIR))
   }
   const dir = USER_DATA_DIRS[browserId]
   if (!dir) return false
@@ -739,6 +819,10 @@ export async function backupBrowserProfile(browserId) {
         'thumbnails',
       ])
     }
+  } else if (browserId === 'epiphany') {
+    // A diferencia de Chromium/Firefox, EPIPHANY_DATA_DIR ya sigue XDG y no mezcla
+    // caché con datos de perfil, así que no hace falta excluir subcarpetas.
+    await runRobocopy(EPIPHANY_DATA_DIR, destDir, [])
   } else {
     await runRobocopy(USER_DATA_DIRS[browserId], destDir, BACKUP_EXCLUDE_DIRS)
   }
@@ -772,6 +856,13 @@ export async function backupBrowserBookmarks(browserId) {
       await fs.copyFile(src, dest)
       savedFiles.push(dest)
     }
+  } else if (browserId === 'epiphany') {
+    const src = await existingPath(path.join(EPIPHANY_DATA_DIR, 'bookmarks.gvdb'))
+    if (src) {
+      const dest = path.join(destDir, 'bookmarks.gvdb')
+      await fs.copyFile(src, dest)
+      savedFiles.push(dest)
+    }
   } else {
     const profileDirs = await findChromiumProfileDirs(browserId)
     for (const dir of profileDirs) {
@@ -800,6 +891,7 @@ const APP_PATH_EXE = {
   firefox: 'firefox',
   brave: IS_LINUX ? 'brave-browser' : 'brave.exe',
   opera: IS_LINUX ? 'opera' : 'opera.exe',
+  epiphany: 'epiphany',
 }
 
 const PASSWORD_MANAGER_URLS = {
@@ -840,9 +932,20 @@ export async function openPasswordManager(browserId) {
     throw new Error(`No se encontró el ejecutable de ${BROWSER_LABELS[browserId]}.`)
   }
 
+  // GNOME Web no expone una página propia (tipo about:logins) para gestionar contraseñas
+  // guardadas: se administran desde un diálogo del menú ≡, no navegable por URL.
+  const passwordsUrl = PASSWORD_MANAGER_URLS[browserId]
+  if (!passwordsUrl) {
+    await run(`${exePath}`)
+    return {
+      browserId,
+      notice: `${BROWSER_LABELS[browserId]} no tiene una página de contraseñas accesible por URL. Abrí el menú ≡ → Contraseñas en la ventana que se abrió.`,
+    }
+  }
+
   await run(IS_WINDOWS
-    ? `start "" "${exePath}" "${PASSWORD_MANAGER_URLS[browserId]}"`
-    : `${exePath} "${PASSWORD_MANAGER_URLS[browserId]}"`)
+    ? `start "" "${exePath}" "${passwordsUrl}"`
+    : `${exePath} "${passwordsUrl}"`)
   return {
     browserId,
     notice:

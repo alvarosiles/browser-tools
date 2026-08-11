@@ -9,6 +9,7 @@ import {
   MinusCircle,
   Loader2,
   Globe,
+  Globe2,
   Compass,
   Flame,
   Shield,
@@ -32,6 +33,7 @@ const BROWSERS = [
   { id: 'firefox', name: 'Mozilla Firefox', icon: Flame, color: 'text-orange-400' },
   { id: 'brave', name: 'Brave', icon: Shield, color: 'text-orange-500' },
   { id: 'opera', name: 'Opera', icon: Circle, color: 'text-red-500' },
+  { id: 'epiphany', name: 'GNOME Web', icon: Globe2, color: 'text-purple-400' },
 ]
 
 function formatBytes(bytes) {

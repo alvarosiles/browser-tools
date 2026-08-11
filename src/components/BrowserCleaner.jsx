@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe, Compass, Flame, Shield, Circle, History, Loader2, PlayCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Globe, Globe2, Compass, Flame, Shield, Circle, History, Loader2, PlayCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import Card from './Card'
 import { clearBrowserData } from '../lib/localAgent'
 import { useLanguage } from '../lib/i18n'
@@ -10,6 +10,7 @@ const BROWSERS = [
   { id: 'firefox', name: 'Mozilla Firefox', icon: Flame, color: 'text-orange-400' },
   { id: 'brave', name: 'Brave', icon: Shield, color: 'text-orange-500' },
   { id: 'opera', name: 'Opera', icon: Circle, color: 'text-red-500' },
+  { id: 'epiphany', name: 'GNOME Web', icon: Globe2, color: 'text-purple-400' },
 ]
 
 const DATA_TYPE_KEYS = ['cookies', 'cache', 'localStorage', 'sessionStorage', 'indexedDB', 'serviceWorkers', 'history']

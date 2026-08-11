@@ -6,25 +6,29 @@ Quiero evolucionar el proyecto actual a una versión **Premium/Pro**, manteniend
 
 Crear un sistema de análisis antes de borrar.
 
+
+<!-- https://dprojects.org/descargas/ -->
+<!-- https://minios.dev/?lang=en -->
+<!-- https://github.com/bmack -->
 ### Escaneo inteligente
 
 * Analizar el PC completo.
-* Detectar archivos temporales.
+<!-- * Detectar archivos temporales. -->
 * Cachés de navegadores.
 * Miniaturas de Windows.
 * Logs antiguos.
-* Crash dumps.
+<!-- * Crash dumps. -->
 * Windows Update cache.
 * Delivery Optimization.
 * DirectX Shader Cache.
 * DNS cache.
-* Papelera.
+<!-- * Papelera. -->
 * Archivos temporales de aplicaciones.
 * Cachés de Microsoft Store.
-* Cachés de Discord, Teams, Steam, etc.
-* Archivos temporales de instaladores.
+<!-- * Cachés de Discord, Teams, Steam, etc. -->
+<!-- * Archivos temporales de instaladores. -->
 
-Mostrar:
+<!-- Mostrar:
 
 ```text
 ANÁLISIS COMPLETADO
@@ -35,7 +39,7 @@ Logs                     340 MB
 Papelera                 5.2 GB
 Windows Update           1.1 GB
 
-TOTAL RECUPERABLE        10.84 GB
+TOTAL RECUPERABLE        10.84 GB -->
 ```
 
 Botones:
@@ -144,12 +148,12 @@ Mejorar el módulo actual de navegadores.
 Soportar:
 
 * Chrome
-* Edge
 * Firefox
 * Brave
 * Opera
+<!-- * Edge
 * Vivaldi
-* Chromium
+* Chromium -->
 
 Detectar automáticamente instalaciones y perfiles.
 
@@ -267,10 +271,10 @@ Administrar aplicaciones de inicio.
 
 Detectar:
 
-* Startup folders.
-* Registro Run.
-* Task Scheduler.
-* servicios configurados para inicio automático.
+<!-- * Startup folders. -->
+<!-- * Registro Run. -->
+<!-- * Task Scheduler. -->
+<!-- * servicios configurados para inicio automático. -->
 
 Mostrar:
 
