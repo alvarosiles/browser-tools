@@ -6,8 +6,8 @@ import fs from 'node:fs/promises'
 import Database from 'better-sqlite3'
 
 const execAsync = promisify(exec)
-const IS_WINDOWS = process.platform === 'win32'
-const IS_LINUX = process.platform === 'linux'
+export const IS_WINDOWS = process.platform === 'win32'
+export const IS_LINUX = process.platform === 'linux'
 
 function run(command, { timeout } = {}) {
   return execAsync(command, { windowsHide: true, timeout }).catch((err) => {
@@ -39,6 +39,8 @@ const USER_DATA_DIRS = {
   edge: IS_LINUX ? path.join(os.homedir(), '.config', 'microsoft-edge') : path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data'),
   brave: IS_LINUX ? path.join(os.homedir(), '.config', 'BraveSoftware', 'Brave-Browser') : path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
   opera: IS_LINUX ? path.join(os.homedir(), '.config', 'opera') : path.join(os.homedir(), 'AppData', 'Roaming', 'Opera Software', 'Opera Stable'),
+  chromium: IS_LINUX ? path.join(os.homedir(), '.config', 'chromium') : path.join(os.homedir(), 'AppData', 'Local', 'Chromium', 'User Data'),
+  vivaldi: IS_LINUX ? path.join(os.homedir(), '.config', 'vivaldi') : path.join(os.homedir(), 'AppData', 'Local', 'Vivaldi', 'User Data'),
 }
 
 const FLAT_PROFILE_BROWSERS = new Set()
@@ -56,6 +58,10 @@ const PROCESS_NAMES = {
   brave: IS_WINDOWS ? 'brave.exe' : 'brave',
   opera: IS_WINDOWS ? 'opera.exe' : 'opera',
   epiphany: 'epiphany',
+  chromium: IS_WINDOWS ? 'chrome.exe' : 'chromium',
+  vivaldi: IS_WINDOWS ? 'vivaldi.exe' : 'vivaldi-bin',
+  librewolf: IS_WINDOWS ? 'librewolf.exe' : 'librewolf',
+  zen: IS_WINDOWS ? 'zen.exe' : 'zen',
 }
 
 // Carpetas de perfil reales de un navegador Chromium (o la carpeta base si es "plano" como Opera).
@@ -181,15 +187,35 @@ async function disableChromiumSync(profileDirs) {
   return patchedCount
 }
 
-async function findFirefoxProfileNames() {
-  const profilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+// LibreWolf y Zen son forks de Firefox (motor Gecko) que reutilizan el mismo formato de
+// perfil (places.sqlite, cookies.sqlite, storage/default/...), pero cada uno con su propia
+// carpeta base en vez de "Mozilla/Firefox" — de ahí que GECKO_PROFILES_DIRS separe por
+// browserId en lugar de asumir siempre la ruta de Firefox.
+const GECKO_PROFILES_DIRS = {
+  firefox: {
+    roaming: IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles'),
+    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles'),
+  },
+  librewolf: {
+    roaming: IS_LINUX ? path.join(os.homedir(), '.librewolf') : path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
+    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'librewolf') : path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
+  },
+  zen: {
+    roaming: IS_LINUX ? path.join(os.homedir(), '.zen') : path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
+    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'zen') : path.join(os.homedir(), 'AppData', 'Local', 'zen'),
+  },
+}
+const GECKO_BROWSER_IDS = new Set(Object.keys(GECKO_PROFILES_DIRS))
+
+async function findFirefoxProfileNames(browserId = 'firefox') {
+  const profilesDir = GECKO_PROFILES_DIRS[browserId].roaming
   const entries = await fs.readdir(profilesDir, { withFileTypes: true }).catch(() => [])
   return entries.filter((e) => e.isDirectory()).map((e) => e.name)
 }
 
-async function findFirefoxHistoryFiles() {
-  const profilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-  const profileNames = await findFirefoxProfileNames()
+async function findFirefoxHistoryFiles(browserId = 'firefox') {
+  const profilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const profileNames = await findFirefoxProfileNames(browserId)
   const paths = await Promise.all(
     profileNames.map((name) => existingPath(path.join(profilesDir, name, 'places.sqlite')))
   )
@@ -215,10 +241,10 @@ const FIREFOX_LOCAL_TYPE_SUBDIRS = {
   cache: ['cache2'],
 }
 
-async function findFirefoxTypeDirs(types) {
-  const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-  const localProfilesDir = IS_LINUX ? path.join(os.homedir(), '.cache', 'mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles')
-  const profileNames = await findFirefoxProfileNames()
+async function findFirefoxTypeDirs(browserId, types) {
+  const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const localProfilesDir = GECKO_PROFILES_DIRS[browserId].local
+  const profileNames = await findFirefoxProfileNames(browserId)
 
   const roaming = profileNames.flatMap((name) =>
     types.flatMap((type) =>
@@ -339,8 +365,8 @@ export async function clearBrowserData(browserId, types) {
 
   if (validTypes.includes('history')) {
     const historyFiles =
-      browserId === 'firefox'
-        ? await findFirefoxHistoryFiles()
+      GECKO_BROWSER_IDS.has(browserId)
+        ? await findFirefoxHistoryFiles(browserId)
         : browserId === 'epiphany'
           ? await findEpiphanyHistoryFiles()
           : await findChromiumHistoryFiles(browserId)
@@ -358,15 +384,15 @@ export async function clearBrowserData(browserId, types) {
       const sessionFile = path.join(EPIPHANY_DATA_DIR, 'session_state.xml')
       await rmWithRetry(sessionFile)
       await rmWithRetry(`${sessionFile}~`)
-    } else if (browserId !== 'firefox') {
+    } else if (!GECKO_BROWSER_IDS.has(browserId)) {
       const profileDirs = await findChromiumProfileDirs(browserId)
       cleared.syncDisabled = await disableChromiumSync(profileDirs)
       for (const dir of profileDirs) {
         await rmWithRetry(path.join(dir, 'Sessions'), { recursive: true })
       }
     } else {
-      const profileNames = await findFirefoxProfileNames()
-      const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
+      const profileNames = await findFirefoxProfileNames(browserId)
+      const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
       for (const name of profileNames) {
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore-backups'), { recursive: true })
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore.jsonlz4'))
@@ -375,20 +401,21 @@ export async function clearBrowserData(browserId, types) {
   }
 
   // "permissions" en Chromium no es una carpeta a borrar, sino una clave dentro de
-  // "Preferences" que hay que editar (ver clearChromiumSitePermissions). En Firefox sí
-  // es un archivo propio (permissions.sqlite), así que ahí sigue el camino genérico.
-  if (validTypes.includes('permissions') && browserId !== 'firefox') {
+  // "Preferences" que hay que editar (ver clearChromiumSitePermissions). En Firefox/
+  // LibreWolf/Zen sí es un archivo propio (permissions.sqlite), así que ahí sigue el
+  // camino genérico.
+  if (validTypes.includes('permissions') && !GECKO_BROWSER_IDS.has(browserId)) {
     const profileDirs = await findChromiumProfileDirs(browserId)
     cleared.permissionsPatched = await clearChromiumSitePermissions(profileDirs)
   }
 
   const dataTypes = validTypes.filter(
-    (t) => t !== 'history' && !(t === 'permissions' && browserId !== 'firefox')
+    (t) => t !== 'history' && !(t === 'permissions' && !GECKO_BROWSER_IDS.has(browserId))
   )
   if (dataTypes.length > 0) {
     const dataDirs =
-      browserId === 'firefox'
-        ? await findFirefoxTypeDirs(dataTypes)
+      GECKO_BROWSER_IDS.has(browserId)
+        ? await findFirefoxTypeDirs(browserId, dataTypes)
         : browserId === 'epiphany'
           ? await findEpiphanyTypeDirs(dataTypes)
           : await findChromiumTypeDirs(browserId, dataTypes)
@@ -508,9 +535,9 @@ async function clearChromiumDomainData(browserId, domain) {
   return { cookiesDeleted, historyDeleted, foldersDeleted, permissionsPatched }
 }
 
-async function clearFirefoxDomainData(domain) {
-  const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-  const profileNames = await findFirefoxProfileNames()
+async function clearFirefoxDomainData(browserId, domain) {
+  const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const profileNames = await findFirefoxProfileNames(browserId)
   const like = `%${domain}%`
   let cookiesDeleted = 0
   let historyDeleted = 0
@@ -583,8 +610,8 @@ export async function clearDomainData(domainInput) {
     if (!(await isBrowserInstalled(browserId))) continue
     await closeBrowser(browserId)
     const stats =
-      browserId === 'firefox'
-        ? await clearFirefoxDomainData(domain)
+      GECKO_BROWSER_IDS.has(browserId)
+        ? await clearFirefoxDomainData(browserId, domain)
         : browserId === 'epiphany'
           ? await clearEpiphanyDomainData(domain)
           : await clearChromiumDomainData(browserId, domain)
@@ -719,9 +746,13 @@ const BROWSER_LABELS = {
   brave: 'Brave',
   opera: 'Opera',
   epiphany: 'GNOME Web',
+  chromium: 'Chromium',
+  vivaldi: 'Vivaldi',
+  librewolf: 'LibreWolf',
+  zen: 'Zen Browser',
 }
 
-const ALL_BROWSER_IDS = ['chrome', 'edge', 'firefox', 'brave', 'opera', 'epiphany']
+const ALL_BROWSER_IDS = ['chrome', 'edge', 'firefox', 'brave', 'opera', 'epiphany', 'chromium', 'vivaldi', 'librewolf', 'zen']
 
 function todayFolderName() {
   const now = new Date()
@@ -730,8 +761,8 @@ function todayFolderName() {
 }
 
 export async function isBrowserInstalled(browserId) {
-  if (browserId === 'firefox') {
-    const names = await findFirefoxProfileNames()
+  if (GECKO_BROWSER_IDS.has(browserId)) {
+    const names = await findFirefoxProfileNames(browserId)
     return names.length > 0
   }
   if (browserId === 'epiphany') {
@@ -809,9 +840,9 @@ export async function backupBrowserProfile(browserId) {
   const destDir = path.join(BACKUP_ROOT, todayFolderName(), BROWSER_LABELS[browserId])
   await fs.mkdir(destDir, { recursive: true })
 
-  if (browserId === 'firefox') {
-    const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-    const profileNames = await findFirefoxProfileNames()
+  if (GECKO_BROWSER_IDS.has(browserId)) {
+    const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+    const profileNames = await findFirefoxProfileNames(browserId)
     for (const name of profileNames) {
       await runRobocopy(path.join(roamingProfilesDir, name), path.join(destDir, name), [
         'cache2',
@@ -833,7 +864,7 @@ export async function backupBrowserProfile(browserId) {
 
 // A diferencia de "Respaldar Perfil", esto solo copia el archivo de favoritos y no
 // requiere cerrar el navegador: es una copia rápida de un único archivo pequeño.
-const BOOKMARKS_FILE = { chrome: 'Bookmarks', edge: 'Bookmarks', brave: 'Bookmarks', opera: 'Bookmarks' }
+const BOOKMARKS_FILE = { chrome: 'Bookmarks', edge: 'Bookmarks', brave: 'Bookmarks', opera: 'Bookmarks', chromium: 'Bookmarks', vivaldi: 'Bookmarks' }
 
 export async function backupBrowserBookmarks(browserId) {
   if (!ALL_BROWSER_IDS.includes(browserId)) throw new Error(`Navegador no soportado: ${browserId}`)
@@ -846,9 +877,9 @@ export async function backupBrowserBookmarks(browserId) {
 
   const savedFiles = []
 
-  if (browserId === 'firefox') {
-    const roamingProfilesDir = IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles')
-    const profileNames = await findFirefoxProfileNames()
+  if (GECKO_BROWSER_IDS.has(browserId)) {
+    const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+    const profileNames = await findFirefoxProfileNames(browserId)
     for (const name of profileNames) {
       const src = await existingPath(path.join(roamingProfilesDir, name, 'places.sqlite'))
       if (!src) continue
@@ -892,6 +923,10 @@ const APP_PATH_EXE = {
   brave: IS_LINUX ? 'brave-browser' : 'brave.exe',
   opera: IS_LINUX ? 'opera' : 'opera.exe',
   epiphany: 'epiphany',
+  chromium: IS_LINUX ? 'chromium' : 'chrome.exe',
+  vivaldi: IS_LINUX ? 'vivaldi' : 'vivaldi.exe',
+  librewolf: IS_LINUX ? 'librewolf' : 'librewolf.exe',
+  zen: IS_LINUX ? 'zen' : 'zen.exe',
 }
 
 const PASSWORD_MANAGER_URLS = {
@@ -900,6 +935,10 @@ const PASSWORD_MANAGER_URLS = {
   brave: 'brave://settings/passwords',
   opera: 'opera://settings/passwords',
   firefox: 'about:logins',
+  chromium: 'chrome://password-manager/passwords',
+  vivaldi: 'vivaldi://settings/passwords',
+  librewolf: 'about:logins',
+  zen: 'about:logins',
 }
 
 async function findBrowserExecutable(browserId) {

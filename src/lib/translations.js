@@ -22,8 +22,11 @@ export const translations = {
       stoppedBody: 'Lo pausaste con el botón del encabezado. Presiona "Servicio detenido" (arriba) para reactivarlo.',
       missingTitle: 'Servicio local no detectado',
       missingBody:
-        'Las acciones de esta página necesitan el servicio local corriendo en esta PC. Instala las dependencias del agente y ejecútalo con npm start dentro de local-agent.',
-      installButton: 'Instalar App',
+        'Las acciones de esta página necesitan el servicio local corriendo en esta PC. Copiá y pegá este comando una sola vez: se instala solo y queda corriendo en segundo plano, sin ventanas ni archivos sueltos.',
+      copyCommandButton: 'Copiar comando',
+      copiedButton: 'Copiado',
+      commandCopiedNotify: 'Comando copiado al portapapeles.',
+      manualDownloadLabel: 'O descargá el binario manualmente:',
     },
     settings: {
       title: 'Personalización',
@@ -216,8 +219,11 @@ export const translations = {
       stoppedBody: 'You paused it with the header button. Click "Service stopped" (above) to resume it.',
       missingTitle: 'Local service not detected',
       missingBody:
-        'The actions on this page need the local service running on this PC. Download and install the app once (it launches automatically on every Windows startup), or check that it is already running.',
-      installButton: 'Install App',
+        'The actions on this page need the local service running on this PC. Copy and paste this command once: it installs itself and keeps running in the background, no windows, no leftover installer file.',
+      copyCommandButton: 'Copy command',
+      copiedButton: 'Copied',
+      commandCopiedNotify: 'Command copied to clipboard.',
+      manualDownloadLabel: 'Or download the binary manually:',
     },
     settings: {
       title: 'Personalization',

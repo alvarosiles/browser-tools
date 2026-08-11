@@ -13,13 +13,33 @@ En Linux, para las funciones de impresoras instala CUPS (`cups`, `cups-client`) 
 
 ## Instalación y ejecución
 
+### Para técnicos (sin Node.js instalado)
+
+Un solo comando en una terminal, una única vez. No hay que buscar un archivo descargado ni dejar ninguna ventana abierta: el binario se copia solo a una ubicación fija, se registra para arrancar con el sistema (oculto) y queda corriendo en segundo plano.
+
+Windows (PowerShell):
+```powershell
+irm https://alvarosiles.github.io/browser-tools/downloads/install.ps1 | iex
+```
+
+Linux (systemd --user):
+```bash
+curl -fsSL https://alvarosiles.github.io/browser-tools/downloads/install.sh | bash
+```
+
+Esto lo hace `ensureInstalled()` en `server.js`: en Windows se registra en `HKCU\...\Run` (vía un `.vbs` intermedio, para arrancar sin ventana) y en Linux escribe una unidad `~/.config/systemd/user/browser-tools-agent.service`. Si en Linux no hay `systemd --user` disponible, se degrada a correr en la terminal actual.
+
+### Para desarrollo (con Node.js instalado)
+
 ```bash
 cd local-agent
 npm install
 npm start
 ```
 
-Debe quedar corriendo en segundo plano mientras usas el panel web (`http://localhost:5180` u otro puerto de Vite). Si no está activo, la web mostrará un aviso de que no pudo conectar con el servicio local.
+En este modo corre en la terminal actual, sin auto-instalarse ni auto-arrancar con el sistema (eso solo pasa cuando corre empaquetado como binario SEA, ver `build:exe`).
+
+Debe quedar corriendo en segundo plano mientras usas el panel web (`http://localhost:5180` u otro puerto de Vite). Si no está activo, la web mostrará un aviso de que no pudo conectar con el servicio local, con el comando de instalación de arriba.
 
 ## Endpoints
 

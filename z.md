@@ -10,6 +10,25 @@ Crear un sistema de análisis antes de borrar.
 <!-- https://dprojects.org/descargas/ -->
 <!-- https://minios.dev/?lang=en -->
 <!-- https://github.com/bmack -->
+
+<!-- ¡Claro! En los juegos, FPS y ping son dos cosas diferentes:
+
+🎮 FPS (frames per second / cuadros por segundo): indica qué tan fluido se ve el juego.
+30 FPS: jugable, pero puede sentirse algo trabado.
+60 FPS: bastante fluido y es un buen objetivo.
+120+ FPS: muy fluido, especialmente útil en juegos competitivos.
+Más FPS generalmente = imagen más suave.
+🌐 Ping (ms): indica cuánto tarda tu conexión en comunicarse con el servidor del juego. Mientras más bajo, mejor.
+1–30 ms: excelente 🟢
+30–60 ms: muy bueno 🟢
+60–100 ms: aceptable 🟡
+100–150 ms: puede notarse retraso 🟠
+150+ ms: bastante lag 🔴
+
+Ejemplo: si tienes 120 FPS y 20 ms de ping, el juego debería verse muy fluido y responder rápidamente. Si tienes 30 FPS y 150 ms, probablemente sentirás tanto tirones como retraso.
+
+En resumen: FPS = qué tan fluido se ve. Ping = qué tan rápido responde tu conexión. -->
+
 ### Escaneo inteligente
 
 * Analizar el PC completo.

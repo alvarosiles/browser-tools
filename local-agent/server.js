@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import {
   clearBrowserData,
@@ -40,44 +40,141 @@ import {
   runAllRepairs,
   isElevated,
   openRemoteApp,
+  IS_WINDOWS,
+  IS_LINUX,
 } from './commands.js'
 
-const require = createRequire(import.meta.url)
 let isSea = () => false
 try {
-  isSea = require('node:sea').isSea
+  // build-exe.js empaqueta este archivo a CJS para el binario SEA — ahí "require" ya es
+  // una función nativa del bundle, y "import.meta.url" queda vacío (esbuild no lo soporta
+  // en salida CJS). Corriendo como ESM normal ("npm start") pasa lo contrario: no existe
+  // "require" global y hace falta construirlo desde import.meta.url.
+  const req = typeof require === 'function' ? require : createRequire(import.meta.url)
+  isSea = req('node:sea').isSea
 } catch {
   // node:sea solo está disponible en versiones recientes de Node.js.
 }
 
 const WORKER_PORT = process.env.PORT || 5177
 const CONTROL_PORT = process.env.CONTROL_PORT || 5178
+const CONTROL_BASE_URL = `http://127.0.0.1:${CONTROL_PORT}`
 
-// Cuando corre empaquetado como .exe (Node SEA), el botón "Instalar App" de la web solo
-// descarga este binario — la "instalación" real (copiarse a una ubicación fija y arrancar
-// junto con Windows) la hace el propio .exe la primera vez que se ejecuta. Así el usuario
-// no depende de tener Node.js instalado ni de correr comandos por consola.
-function ensureInstalled() {
-  if (!isSea() || process.platform !== 'win32') return
+// Antes de instalar/copiar nada, se chequea si ya hay una instancia corriendo (el puerto
+// de control queda vivo aunque el usuario haya pausado el servicio con "Stop") — evita
+// recopiar un binario bloqueado y evita pelear por el puerto con la instancia real.
+async function isAlreadyRunning() {
   try {
-    const installDir = path.join(os.homedir(), 'AppData', 'Local', 'BrowserToolsAgent')
-    const installPath = path.join(installDir, 'BrowserToolsAgent.exe')
-    const currentPath = path.resolve(process.execPath)
-    if (currentPath.toLowerCase() === installPath.toLowerCase()) return
-
-    fs.mkdirSync(installDir, { recursive: true })
-    fs.copyFileSync(currentPath, installPath)
-    execSync(
-      `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v BrowserToolsAgent /t REG_SZ /d "\\"${installPath}\\"" /f`,
-      { windowsHide: true }
-    )
-    console.log(`Instalado en ${installPath}. Se iniciará automáticamente al encender Windows.`)
-  } catch (err) {
-    console.error('No se pudo completar la instalación automática:', err.message)
+    const res = await fetch(`${CONTROL_BASE_URL}/status`, { signal: AbortSignal.timeout(600) })
+    return res.ok
+  } catch {
+    return false
   }
 }
 
-ensureInstalled()
+// El script de arranque que descarga y ejecuta el binario (install.ps1) solo dispara este
+// primer lanzamiento: a partir de acá, la instalación real (copiarse a una ubicación fija,
+// registrarse para arrancar con el sistema, y quedar corriendo oculto en segundo plano) la
+// hace el propio binario. El .vbs intermedio es necesario porque la clave de registro "Run"
+// la ejecuta el propio Explorer al iniciar sesión — no nuestro proceso — así que no hay forma
+// de pedirle "sin ventana" directamente ahí; wscript.exe sí sabe lanzar oculto.
+function buildHiddenLauncherVbs(targetExePath) {
+  return `Set shell = CreateObject("WScript.Shell")\r\nshell.Run Chr(34) & "${targetExePath}" & Chr(34), 0, False\r\n`
+}
+
+async function ensureInstalledWindows() {
+  const installDir = path.join(os.homedir(), 'AppData', 'Local', 'BrowserToolsAgent')
+  const installPath = path.join(installDir, 'BrowserToolsAgent.exe')
+  const vbsPath = path.join(installDir, 'BrowserToolsAgentLauncher.vbs')
+  const currentPath = path.resolve(process.execPath)
+
+  if (currentPath.toLowerCase() === installPath.toLowerCase()) return false
+  if (await isAlreadyRunning()) return true
+
+  try {
+    fs.mkdirSync(installDir, { recursive: true })
+    fs.copyFileSync(currentPath, installPath)
+    fs.writeFileSync(vbsPath, buildHiddenLauncherVbs(installPath), 'utf8')
+
+    const wscriptPath = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'wscript.exe')
+    execSync(
+      `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v BrowserToolsAgent /t REG_SZ /d "\\"${wscriptPath}\\" \\"${vbsPath}\\"" /f`,
+      { windowsHide: true }
+    )
+
+    const child = spawn(installPath, [], { detached: true, stdio: 'ignore', windowsHide: true })
+    child.unref()
+    return true
+  } catch (err) {
+    console.error('No se pudo completar la instalación automática (Windows):', err.message)
+    return false
+  }
+}
+
+function systemdAvailable() {
+  try {
+    execSync('systemctl --user --version', { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function ensureInstalledLinux() {
+  const installDir = path.join(os.homedir(), '.local', 'share', 'browser-tools-agent')
+  const installPath = path.join(installDir, 'browser-tools-agent')
+  const currentPath = path.resolve(process.execPath)
+
+  if (currentPath === installPath) return false
+  if (await isAlreadyRunning()) return true
+
+  if (!systemdAvailable()) {
+    console.error(
+      'No se encontró systemd --user: no se puede registrar el arranque automático. El servicio sigue corriendo en esta terminal — no la cierres.'
+    )
+    return false
+  }
+
+  try {
+    fs.mkdirSync(installDir, { recursive: true })
+    fs.copyFileSync(currentPath, installPath)
+    fs.chmodSync(installPath, 0o755)
+
+    const unitDir = path.join(os.homedir(), '.config', 'systemd', 'user')
+    fs.mkdirSync(unitDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(unitDir, 'browser-tools-agent.service'),
+      '[Unit]\n' +
+        'Description=IT Support Tools - Browser Tools Local Agent\n' +
+        'After=network.target\n\n' +
+        '[Service]\n' +
+        `ExecStart=${installPath}\n` +
+        'Restart=on-failure\n' +
+        'RestartSec=3\n\n' +
+        '[Install]\n' +
+        'WantedBy=default.target\n'
+    )
+
+    execSync('systemctl --user daemon-reload')
+    execSync('systemctl --user enable --now browser-tools-agent')
+    return true
+  } catch (err) {
+    console.error('No se pudo completar la instalación automática (Linux):', err.message)
+    return false
+  }
+}
+
+// Cuando corre empaquetado como binario (Node SEA), el comando de instalación de la web
+// (install.ps1/install.sh) solo descarga y ejecuta este binario una vez — toda la
+// instalación real (copiarse a una ubicación fija, registrarse para arrancar con el
+// sistema, y relanzarse oculto en segundo plano) la hace el propio binario. Así el
+// usuario no depende de tener Node.js instalado ni de dejar una terminal abierta.
+async function ensureInstalled() {
+  if (!isSea()) return false
+  if (IS_WINDOWS) return ensureInstalledWindows()
+  if (IS_LINUX) return ensureInstalledLinux()
+  return false
+}
 
 const app = express()
 app.use(cors())
@@ -113,9 +210,12 @@ controlApp.post('/stop', (_req, res) => {
   stopWorker()
   res.json({ ok: true, running: false })
 })
-controlApp.listen(CONTROL_PORT, '127.0.0.1', () => {
-  console.log(`Panel de control escuchando en http://127.0.0.1:${CONTROL_PORT}`)
-})
+
+function startControlPanel() {
+  controlApp.listen(CONTROL_PORT, '127.0.0.1', () => {
+    console.log(`Panel de control escuchando en http://127.0.0.1:${CONTROL_PORT}`)
+  })
+}
 
 function handle(action, fn) {
   app.post(`/${action}`, async (req, res) => {
@@ -272,4 +372,14 @@ app.get('/repair-status/:jobId', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
-startWorker()
+async function main() {
+  const handedOff = await ensureInstalled()
+  if (handedOff) {
+    process.exit(0)
+    return
+  }
+  startWorker()
+  startControlPanel()
+}
+
+main()

@@ -6,4 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/browser-tools/' : '/',
   plugins: [react(), tailwindcss()],
+  server: {
+    open: true,
+  },
 })

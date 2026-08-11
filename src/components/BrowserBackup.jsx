@@ -14,6 +14,10 @@ import {
   Flame,
   Shield,
   Circle,
+  Atom,
+  Palette,
+  PawPrint,
+  Sparkles,
 } from 'lucide-react'
 import Card from './Card'
 import {
@@ -34,6 +38,10 @@ const BROWSERS = [
   { id: 'brave', name: 'Brave', icon: Shield, color: 'text-orange-500' },
   { id: 'opera', name: 'Opera', icon: Circle, color: 'text-red-500' },
   { id: 'epiphany', name: 'GNOME Web', icon: Globe2, color: 'text-purple-400' },
+  { id: 'chromium', name: 'Chromium', icon: Atom, color: 'text-blue-400' },
+  { id: 'vivaldi', name: 'Vivaldi', icon: Palette, color: 'text-rose-400' },
+  { id: 'librewolf', name: 'LibreWolf', icon: PawPrint, color: 'text-emerald-400' },
+  { id: 'zen', name: 'Zen Browser', icon: Sparkles, color: 'text-violet-400' },
 ]
 
 function formatBytes(bytes) {

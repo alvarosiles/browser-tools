@@ -10,7 +10,11 @@ import * as esbuild from 'esbuild'
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 const buildDir = path.join(dir, 'build')
-const outExe = path.join(dir, 'dist', 'BrowserToolsAgent.exe')
+// SEA no cross-compila: esto siempre empaqueta el Node del SO donde corre este script.
+// Un .exe de Windows válido solo sale corriendo esto en una máquina Windows real.
+const isWindows = process.platform === 'win32'
+const outName = isWindows ? 'BrowserToolsAgent.exe' : 'browser-tools-agent'
+const outExe = path.join(dir, 'dist', outName)
 
 fs.rmSync(buildDir, { recursive: true, force: true })
 fs.mkdirSync(buildDir, { recursive: true })
@@ -56,5 +60,9 @@ execFileSync(
   ],
   { stdio: 'inherit' }
 )
+
+// postject reescribe el archivo con --overwrite, así que el bit ejecutable se confirma
+// después de ese paso, no antes.
+if (!isWindows) fs.chmodSync(outExe, 0o755)
 
 console.log(`\nListo: ${outExe}`)

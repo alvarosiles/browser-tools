@@ -21,7 +21,7 @@ export default function Dashboard({ onNotify }) {
         <p className="text-sm text-slate-500 dark:text-slate-400">{t('dashboard.subtitle')}</p>
       </div>
 
-      <LocalAgentStatus />
+      <LocalAgentStatus onNotify={onNotify} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
         <div className="lg:col-span-2 xl:col-span-3">
