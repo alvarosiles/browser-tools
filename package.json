@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "web": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
+    "web1": "bash dev.sh",
     "deploy": "node scripts/build-agent-exe.js && cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
   },
   "dependencies": {
