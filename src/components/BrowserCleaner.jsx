@@ -19,7 +19,7 @@ const BROWSERS = [
 
 const DATA_TYPE_KEYS = ['cookies', 'cache', 'localStorage', 'sessionStorage', 'indexedDB', 'serviceWorkers', 'history']
 
-// Tipos adicionales, ocultos tras "Avanzado". Los soportados tienen una ruta real de
+// Tipos adicionales, ocultos tras "Detallado". Los soportados tienen una ruta real de
 // perfil que el servicio local sabe borrar (ver local-agent/commands.js); los no
 // soportados no tienen una carpeta propia y aislada en Chromium/Firefox (o borrarlos
 // implicaría tocar un archivo de preferencias compartido), así que se muestran
@@ -47,9 +47,14 @@ export default function BrowserCleaner({ onNotify }) {
   const { t } = useLanguage()
   const [selection, setSelection] = useState(emptySelection)
   const [processing, setProcessing] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showDetailed, setShowDetailed] = useState(false)
 
-  const visibleTypes = showAdvanced ? ALL_DATA_TYPES : DATA_TYPES
+  const visibleTypes = showDetailed ? ALL_DATA_TYPES : DATA_TYPES
+
+  const isRowFullyChecked = (browserId) => {
+    const supportedKeys = visibleTypes.filter((t) => t.supported !== false).map((t) => t.key)
+    return supportedKeys.length > 0 && supportedKeys.every((key) => selection[browserId][key])
+  }
 
   const toggle = (browserId, typeKey, supported = true) => {
     if (!supported) return
@@ -104,17 +109,21 @@ export default function BrowserCleaner({ onNotify }) {
           <thead>
             <tr className="border-b border-slate-200 bg-slate-100/70 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-950/50">
               <th className="whitespace-nowrap px-4 py-2.5 font-medium">{t('browserCleaner.browser')}</th>
-              {visibleTypes.map((type) => (
-                <th
-                  key={type.key}
-                  title={type.supported === false ? t('browserCleaner.unsupportedTitle') : undefined}
-                  className={`whitespace-nowrap px-3 py-2.5 text-center font-medium ${
-                    type.supported === false ? 'text-slate-400 dark:text-slate-600' : ''
-                  }`}
-                >
-                  {t(`browserCleaner.dataTypes.${type.key}`)}
-                </th>
-              ))}
+              {showDetailed ? (
+                visibleTypes.map((type) => (
+                  <th
+                    key={type.key}
+                    title={type.supported === false ? t('browserCleaner.unsupportedTitle') : undefined}
+                    className={`whitespace-nowrap px-3 py-2.5 text-center font-medium ${
+                      type.supported === false ? 'text-slate-400 dark:text-slate-600' : ''
+                    }`}
+                  >
+                    {t(`browserCleaner.dataTypes.${type.key}`)}
+                  </th>
+                ))
+              ) : (
+                <th className="whitespace-nowrap px-3 py-2.5 text-center font-medium">{t('browserCleaner.deleteDataColumn')}</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -132,18 +141,30 @@ export default function BrowserCleaner({ onNotify }) {
                     <span className="font-medium text-slate-800 hover:underline dark:text-slate-200">{browser.name}</span>
                   </button>
                 </td>
-                {visibleTypes.map((type) => (
-                  <td key={type.key} className="px-3 py-2.5 text-center">
+                {showDetailed ? (
+                  visibleTypes.map((type) => (
+                    <td key={type.key} className="px-3 py-2.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selection[browser.id][type.key]}
+                        onChange={() => toggle(browser.id, type.key, type.supported !== false)}
+                        disabled={processing || type.supported === false}
+                        title={type.supported === false ? t('browserCleaner.unsupportedTitle') : undefined}
+                        className="h-4 w-4 cursor-pointer accent-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
+                      />
+                    </td>
+                  ))
+                ) : (
+                  <td className="px-3 py-2.5 text-center">
                     <input
                       type="checkbox"
-                      checked={selection[browser.id][type.key]}
-                      onChange={() => toggle(browser.id, type.key, type.supported !== false)}
-                      disabled={processing || type.supported === false}
-                      title={type.supported === false ? t('browserCleaner.unsupportedTitle') : undefined}
+                      checked={isRowFullyChecked(browser.id)}
+                      onChange={() => toggleAllForBrowser(browser.id)}
+                      disabled={processing}
                       className="h-4 w-4 cursor-pointer accent-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
                     />
                   </td>
-                ))}
+                )}
               </tr>
             ))}
           </tbody>
@@ -161,12 +182,12 @@ export default function BrowserCleaner({ onNotify }) {
         </button>
 
         <button
-          onClick={() => setShowAdvanced((v) => !v)}
+          onClick={() => setShowDetailed((v) => !v)}
           disabled={processing}
           className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
-          {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          {t('browserCleaner.advanced')}
+          {showDetailed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {t('browserCleaner.detailed')}
         </button>
       </div>
     </Card>

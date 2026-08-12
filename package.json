@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bash dev.sh",
     "build": "vite build",
     "preview": "vite preview",
-    "web": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
+    "web": "bash dev.sh",
     "web1": "bash dev.sh",
+    "web:run": "concurrently -n agent,web -c yellow,cyan \"npm start --prefix local-agent\" \"vite\"",
     "deploy": "node scripts/build-agent-exe.js && cross-env GITHUB_PAGES=true vite build && gh-pages -d dist"
   },
   "dependencies": {

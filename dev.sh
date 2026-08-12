@@ -19,4 +19,4 @@ fi
 [ -d local-agent/node_modules ] || npm install --prefix local-agent
 
 echo "Abriendo http://localhost:5173 (Ctrl+C para detener)"
-npm run web
+npm run web:run
