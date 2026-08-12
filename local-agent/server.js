@@ -43,6 +43,7 @@ import {
   IS_WINDOWS,
   IS_LINUX,
 } from './commands.js'
+import { AGENT_VERSION, startUpdateChecker } from './updater.js'
 
 let isSea = () => false
 try {
@@ -371,6 +372,7 @@ app.get('/repair-status/:jobId', (req, res) => {
 })
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
+app.get('/version', (_req, res) => res.json({ ok: true, version: AGENT_VERSION }))
 
 async function main() {
   const handedOff = await ensureInstalled()
@@ -380,6 +382,7 @@ async function main() {
   }
   startWorker()
   startControlPanel()
+  if (isSea()) startUpdateChecker()
 }
 
 main()
