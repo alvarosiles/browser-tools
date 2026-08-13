@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Instala el IT Support Tools Local Agent en segundo plano, sin dejar ningún
-# "instalador" visible: descarga el binario, lo ejecuta una única vez, y el
-# propio binario se copia a una ubicación fija, registra un servicio
-# systemd --user, y sale. A partir de ahí corre solo, sin terminal abierta.
+# Instala el IT Support Tools Local Agent.
+# En Linux: descarga el script de instalación completo y lo ejecuta
+# En Windows (Git Bash/WSL): cargará el instalador PowerShell
 #
-# Uso:  curl -fsSL https://alvarosiles.github.io/browser-tools/downloads/install.sh | bash
+# Uso: curl -fsSL https://alvarosiles.github.io/browser-tools/downloads/install.sh | bash
+
 set -euo pipefail
 
-url='https://alvarosiles.github.io/browser-tools/downloads/browser-tools-agent'
-dest="$(mktemp -t browser-tools-agent.XXXXXX)"
+INSTALL_SCRIPT_URL='https://alvarosiles.github.io/browser-tools/downloads/install-linux.sh'
+temp_install="$(mktemp -t browser-tools-install.XXXXXX.sh)"
+trap "rm -f ${temp_install}" EXIT
 
-echo 'Descargando IT Support Tools Agent...'
-curl -fsSL "$url" -o "$dest"
-chmod +x "$dest"
+echo 'Descargando instalador...'
+if ! curl -fsSL "$INSTALL_SCRIPT_URL" -o "$temp_install"; then
+  echo "Error: No se pudo descargar el instalador desde $INSTALL_SCRIPT_URL"
+  exit 1
+fi
 
-echo 'Instalando en segundo plano...'
-"$dest"
-rm -f "$dest"
-
-echo 'Listo. Verificá con: systemctl --user status browser-tools-agent'
+chmod +x "$temp_install"
+echo 'Ejecutando instalador...'
+"$temp_install"
