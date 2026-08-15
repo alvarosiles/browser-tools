@@ -200,6 +200,47 @@ function stopWorker() {
   console.log('Servicio detenido (Stop).')
 }
 
+// Desinstalación completa: apaga el servicio, quita el registro de arranque (Windows) o
+// la unidad systemd (Linux), y borra la carpeta de instalación. En Windows el .exe no se
+// puede borrar mientras corre, así que se delega el borrado a un cmd.exe desacoplado que
+// espera a que el proceso actual termine.
+function uninstallWindows() {
+  const installDir = path.join(os.homedir(), 'AppData', 'Local', 'BrowserToolsAgent')
+  try {
+    execSync(
+      'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v BrowserToolsAgent /f',
+      { stdio: 'ignore', windowsHide: true }
+    )
+  } catch {}
+
+  const pid = process.pid
+  const script = `ping 127.0.0.1 -n 3 >nul & taskkill /PID ${pid} /F >nul 2>&1 & rmdir /s /q "${installDir}"`
+  spawn('cmd.exe', ['/c', script], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+}
+
+function uninstallLinux() {
+  try {
+    execSync('systemctl --user disable --now browser-tools-agent', { stdio: 'ignore' })
+  } catch {}
+  try {
+    fs.rmSync(path.join(os.homedir(), '.config', 'systemd', 'user', 'browser-tools-agent.service'), {
+      force: true,
+    })
+    execSync('systemctl --user daemon-reload', { stdio: 'ignore' })
+  } catch {}
+
+  // El binario SEA se instala bajo .local/share/, la variante Node (install-linux.sh) bajo
+  // .local/ a secas — se limpian ambas ubicaciones posibles sin saber cuál se usó.
+  for (const dir of [
+    path.join(os.homedir(), '.local', 'share', 'browser-tools-agent'),
+    path.join(os.homedir(), '.local', 'browser-tools-agent'),
+  ]) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true })
+    } catch {}
+  }
+}
+
 const controlApp = express()
 controlApp.use(cors())
 controlApp.get('/status', (_req, res) => res.json({ ok: true, running: workerServer !== null }))
@@ -210,6 +251,15 @@ controlApp.post('/start', (_req, res) => {
 controlApp.post('/stop', (_req, res) => {
   stopWorker()
   res.json({ ok: true, running: false })
+})
+controlApp.post('/uninstall', (_req, res) => {
+  res.json({ ok: true })
+  setTimeout(() => {
+    stopWorker()
+    if (IS_WINDOWS) uninstallWindows()
+    else if (IS_LINUX) uninstallLinux()
+    process.exit(0)
+  }, 300)
 })
 
 function startControlPanel() {

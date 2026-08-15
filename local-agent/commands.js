@@ -51,17 +51,22 @@ const FLAT_PROFILE_BROWSERS = new Set()
 const EPIPHANY_DATA_DIR = path.join(os.homedir(), '.local', 'share', 'epiphany')
 const EPIPHANY_CACHE_DIR = path.join(os.homedir(), '.cache', 'epiphany')
 
-const PROCESS_NAMES = {
-  chrome: IS_WINDOWS ? 'chrome.exe' : 'chrome',
-  edge: IS_WINDOWS ? 'msedge.exe' : 'msedge',
-  firefox: IS_WINDOWS ? 'firefox.exe' : 'firefox',
-  brave: IS_WINDOWS ? 'brave.exe' : 'brave',
-  opera: IS_WINDOWS ? 'opera.exe' : 'opera',
-  epiphany: 'epiphany',
-  chromium: IS_WINDOWS ? 'chrome.exe' : 'chromium',
-  vivaldi: IS_WINDOWS ? 'vivaldi.exe' : 'vivaldi-bin',
-  librewolf: IS_WINDOWS ? 'librewolf.exe' : 'librewolf',
-  zen: IS_WINDOWS ? 'zen.exe' : 'zen',
+// El nombre real del proceso en Linux varía según distro/empaquetado (deb, snap, flatpak,
+// AppImage propio del fabricante) — p. ej. Brave puede correr como "brave", "brave-browser"
+// o "brave-bin" según cómo se instaló. Por eso se prueba una lista de candidatos por
+// navegador en vez de un único nombre fijo, que fallaba en silencio (pgrep -x sin match
+// hace que closeBrowser piense que el navegador ya está cerrado y siga sin cerrarlo).
+const PROCESS_NAME_CANDIDATES = {
+  chrome: IS_WINDOWS ? ['chrome.exe'] : ['chrome', 'google-chrome', 'google-chrome-stable'],
+  edge: IS_WINDOWS ? ['msedge.exe'] : ['msedge'],
+  firefox: IS_WINDOWS ? ['firefox.exe'] : ['firefox', 'firefox-bin', 'firefox-esr'],
+  brave: IS_WINDOWS ? ['brave.exe'] : ['brave', 'brave-browser', 'brave-bin'],
+  opera: IS_WINDOWS ? ['opera.exe'] : ['opera', 'opera-bin', 'opera-stable'],
+  epiphany: ['epiphany'],
+  chromium: IS_WINDOWS ? ['chrome.exe'] : ['chromium', 'chromium-browser', 'chromium-browse', 'chrome'],
+  vivaldi: IS_WINDOWS ? ['vivaldi.exe'] : ['vivaldi-bin', 'vivaldi'],
+  librewolf: IS_WINDOWS ? ['librewolf.exe'] : ['librewolf'],
+  zen: IS_WINDOWS ? ['zen.exe'] : ['zen', 'zen-bin', 'zen-browser'],
 }
 
 // Carpetas de perfil reales de un navegador Chromium (o la carpeta base si es "plano" como Opera).
@@ -191,30 +196,65 @@ async function disableChromiumSync(profileDirs) {
 // perfil (places.sqlite, cookies.sqlite, storage/default/...), pero cada uno con su propia
 // carpeta base en vez de "Mozilla/Firefox" — de ahí que GECKO_PROFILES_DIRS separe por
 // browserId en lugar de asumir siempre la ruta de Firefox.
-const GECKO_PROFILES_DIRS = {
-  firefox: {
-    roaming: IS_LINUX ? path.join(os.homedir(), '.mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles'),
-    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'mozilla', 'firefox') : path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles'),
-  },
-  librewolf: {
-    roaming: IS_LINUX ? path.join(os.homedir(), '.librewolf') : path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
-    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'librewolf') : path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
-  },
-  zen: {
-    roaming: IS_LINUX ? path.join(os.homedir(), '.zen') : path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
-    local: IS_LINUX ? path.join(os.homedir(), '.cache', 'zen') : path.join(os.homedir(), 'AppData', 'Local', 'zen'),
-  },
+// Firefox en Linux puede venir empaquetado como binario nativo, snap (default en Ubuntu
+// 22.04+) o flatpak, y cada uno guarda el perfil en una carpeta base distinta. Se prueban
+// varios candidatos en orden y se usa el primero que realmente tenga perfiles — antes solo
+// se probaba la ruta nativa, así que en una instalación snap no encontraba nada y "borrar
+// datos" no tenía ningún perfil sobre el cual actuar.
+const GECKO_PROFILE_CANDIDATES = {
+  firefox: IS_LINUX
+    ? [
+        {
+          roaming: path.join(os.homedir(), '.mozilla', 'firefox'),
+          local: path.join(os.homedir(), '.cache', 'mozilla', 'firefox'),
+        },
+        {
+          roaming: path.join(os.homedir(), 'snap', 'firefox', 'common', '.mozilla', 'firefox'),
+          local: path.join(os.homedir(), 'snap', 'firefox', 'common', '.cache', 'mozilla', 'firefox'),
+        },
+        {
+          roaming: path.join(os.homedir(), '.var', 'app', 'org.mozilla.firefox', '.mozilla', 'firefox'),
+          local: path.join(os.homedir(), '.var', 'app', 'org.mozilla.firefox', '.cache', 'mozilla', 'firefox'),
+        },
+      ]
+    : [
+        {
+          roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles'),
+          local: path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles'),
+        },
+      ],
+  librewolf: [
+    {
+      roaming: IS_LINUX ? path.join(os.homedir(), '.librewolf') : path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
+      local: IS_LINUX ? path.join(os.homedir(), '.cache', 'librewolf') : path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
+    },
+  ],
+  zen: [
+    {
+      roaming: IS_LINUX ? path.join(os.homedir(), '.zen') : path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
+      local: IS_LINUX ? path.join(os.homedir(), '.cache', 'zen') : path.join(os.homedir(), 'AppData', 'Local', 'zen'),
+    },
+  ],
 }
-const GECKO_BROWSER_IDS = new Set(Object.keys(GECKO_PROFILES_DIRS))
+const GECKO_BROWSER_IDS = new Set(Object.keys(GECKO_PROFILE_CANDIDATES))
+
+async function resolveGeckoDirs(browserId) {
+  const candidates = GECKO_PROFILE_CANDIDATES[browserId]
+  for (const candidate of candidates) {
+    const entries = await fs.readdir(candidate.roaming, { withFileTypes: true }).catch(() => [])
+    if (entries.some((e) => e.isDirectory())) return candidate
+  }
+  return candidates[0]
+}
 
 async function findFirefoxProfileNames(browserId = 'firefox') {
-  const profilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const { roaming: profilesDir } = await resolveGeckoDirs(browserId)
   const entries = await fs.readdir(profilesDir, { withFileTypes: true }).catch(() => [])
   return entries.filter((e) => e.isDirectory()).map((e) => e.name)
 }
 
 async function findFirefoxHistoryFiles(browserId = 'firefox') {
-  const profilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const { roaming: profilesDir } = await resolveGeckoDirs(browserId)
   const profileNames = await findFirefoxProfileNames(browserId)
   const paths = await Promise.all(
     profileNames.map((name) => existingPath(path.join(profilesDir, name, 'places.sqlite')))
@@ -318,22 +358,41 @@ async function isProcessRunning(processName) {
   return stdout.toLowerCase().includes(processName.toLowerCase())
 }
 
+// Devuelve cuáles de los nombres candidatos coinciden con un proceso realmente corriendo
+// ahora mismo, no solo el primero — un cierre necesita apuntar a todos los que apliquen
+// (algunos empaquetados lanzan más de un proceso con nombres distintos, p. ej. un launcher
+// y el binario real).
+async function runningProcessNames(candidates) {
+  const checks = await Promise.all(candidates.map(async (name) => ((await isProcessRunning(name)) ? name : null)))
+  return checks.filter(Boolean)
+}
+
 // Algunos navegadores (p. ej. Brave con "seguir ejecutando apps en segundo plano") pueden
 // relanzar procesos justo después de un taskkill puntual. Se insiste con varias rondas de
-// taskkill hasta confirmar, vía tasklist, que el proceso realmente desapareció.
+// taskkill hasta confirmar, vía tasklist/pgrep, que el proceso realmente desapareció. El
+// nombre real del binario varía según distro/empaquetado, así que se prueban varios
+// candidatos por navegador (ver PROCESS_NAME_CANDIDATES) en vez de asumir uno solo.
 async function closeBrowser(browserId, { retries = 8, delayMs = 400 } = {}) {
-  const processName = PROCESS_NAMES[browserId]
-  if (!processName) throw new Error(`Navegador no soportado: ${browserId}`)
+  const candidates = PROCESS_NAME_CANDIDATES[browserId]
+  if (!candidates) throw new Error(`Navegador no soportado: ${browserId}`)
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
-    await run(IS_WINDOWS ? `taskkill /IM ${processName} /F` : `pkill -TERM -x ${processName}`).catch(() => {})
+    const running = await runningProcessNames(candidates)
+    if (running.length === 0) return
+
+    await Promise.all(
+      running.map((name) =>
+        run(IS_WINDOWS ? `taskkill /IM ${name} /F` : `pkill -TERM -x ${name}`).catch(() => {})
+      )
+    )
     await wait(delayMs)
-    if (!(await isProcessRunning(processName))) return
   }
 
-  throw new Error(
-    `No se pudo cerrar completamente ${processName}: sigue relanzándose (¿ejecución en segundo plano activada?).`
-  )
+  if ((await runningProcessNames(candidates)).length > 0) {
+    throw new Error(
+      `No se pudo cerrar completamente ${BROWSER_LABELS[browserId] || browserId}: sigue relanzándose (¿ejecución en segundo plano activada?).`
+    )
+  }
 }
 
 export const BROWSER_DATA_TYPES = [
