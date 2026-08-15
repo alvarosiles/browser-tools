@@ -290,6 +290,13 @@ const GECKO_PROFILE_CANDIDATES = {
         },
       ]
     : [
+        // Al igual que Firefox, en Windows los navegadores basados en el motor de perfiles
+        // de Gecko anidan los perfiles en una subcarpeta "Profiles" (no directo en
+        // "AppData\Roaming\<app>"), con un profiles.ini al lado indicando cuál es el activo.
+        {
+          roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf', 'Profiles'),
+          local: path.join(os.homedir(), 'AppData', 'Local', 'librewolf', 'Profiles'),
+        },
         {
           roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
           local: path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
@@ -309,6 +316,10 @@ const GECKO_PROFILE_CANDIDATES = {
         },
       ]
     : [
+        {
+          roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'zen', 'Profiles'),
+          local: path.join(os.homedir(), 'AppData', 'Local', 'zen', 'Profiles'),
+        },
         {
           roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
           local: path.join(os.homedir(), 'AppData', 'Local', 'zen'),
@@ -791,20 +802,28 @@ export async function clearDomainData(domainInput) {
   const domain = normalizeDomain(domainInput)
   const results = []
 
+  // Si un navegador anterior en ALL_BROWSER_IDS falla al cerrarse (p. ej. Chrome/Edge con
+  // "seguir ejecutándose en segundo plano" activado) o su borrado tira una excepción, eso
+  // no debe abortar el resto: sin este try/catch, los navegadores que vienen después en la
+  // lista (Vivaldi, LibreWolf, Zen, ...) quedaban sin procesar y sin ningún aviso de por qué.
   for (const browserId of ALL_BROWSER_IDS) {
     if (!(await isBrowserInstalled(browserId))) continue
-    await closeBrowser(browserId)
-    const stats =
-      GECKO_BROWSER_IDS.has(browserId)
-        ? await clearFirefoxDomainData(browserId, domain)
-        : browserId === 'epiphany'
-          ? await clearEpiphanyDomainData(domain)
-          : await clearChromiumDomainData(browserId, domain)
-    results.push({ browserId, ...stats })
+    try {
+      await closeBrowser(browserId)
+      const stats =
+        GECKO_BROWSER_IDS.has(browserId)
+          ? await clearFirefoxDomainData(browserId, domain)
+          : browserId === 'epiphany'
+            ? await clearEpiphanyDomainData(domain)
+            : await clearChromiumDomainData(browserId, domain)
+      results.push({ browserId, ...stats })
+    } catch (err) {
+      results.push({ browserId, error: err.message })
+    }
   }
 
   const totalChanges = results.reduce(
-    (sum, r) => sum + r.cookiesDeleted + r.historyDeleted + r.foldersDeleted + (r.permissionsPatched || 0),
+    (sum, r) => sum + (r.cookiesDeleted || 0) + (r.historyDeleted || 0) + (r.foldersDeleted || 0) + (r.permissionsPatched || 0),
     0
   )
   if (totalChanges === 0) {
