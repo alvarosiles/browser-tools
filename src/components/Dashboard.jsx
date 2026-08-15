@@ -1,6 +1,4 @@
-import BrowserCleaner from './BrowserCleaner'
-import DomainCleaner from './DomainCleaner'
-import BrowserBackup from './BrowserBackup'
+import BrowserManager from './BrowserManager'
 import WindowsTools from './WindowsTools'
 import PrinterTools from './PrinterTools'
 import LocalAgentStatus from './LocalAgentStatus'
@@ -28,13 +26,7 @@ export default function Dashboard({ onNotify }) {
           <SettingsPanel />
         </div>
         <div className="lg:col-span-2 xl:col-span-3">
-          <BrowserCleaner onNotify={onNotify} />
-        </div>
-        <div className="lg:col-span-2 xl:col-span-3">
-          <DomainCleaner onNotify={onNotify} />
-        </div>
-        <div className="lg:col-span-2 xl:col-span-3">
-          <BrowserBackup onNotify={onNotify} />
+          <BrowserManager onNotify={onNotify} />
         </div>
         <WindowsTools onNotify={onNotify} />
         <PrinterTools onNotify={onNotify} />

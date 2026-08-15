@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Borrar y respaldar navegadores</title>
+
+  <style>
+    :root {
+      --bg: #050a18;
+      --panel: #0a1124;
+      --panel-2: #0d162c;
+      --border: #1d2a45;
+      --border-light: #263754;
+      --text: #edf4ff;
+      --muted: #8293b3;
+      --blue: #4f8cff;
+      --blue-2: #2563eb;
+      --cyan: #22d3ee;
+      --green: #20d89a;
+      --danger: #ff5d73;
+      --shadow: 0 25px 70px rgba(0, 0, 0, .35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(37, 99, 235, .13), transparent 30%),
+        radial-gradient(circle at 90% 20%, rgba(34, 211, 238, .06), transparent 25%),
+        var(--bg);
+      padding: 32px;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      margin: auto;
+    }
+
+    /* Header */
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #214071;
+      border-radius: 14px;
+      color: #62a4ff;
+      background: linear-gradient(145deg, #0d244d, #09162d);
+      box-shadow: 0 10px 30px rgba(37, 99, 235, .15);
+      font-size: 20px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -.3px;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #8fa5c9;
+      font-size: 12px;
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(10, 17, 36, .65);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px rgba(32, 216, 154, .7);
+    }
+
+    /* Main panel */
+
+    .panel {
+      border: 1px solid var(--border);
+      background: linear-gradient(145deg, rgba(11, 18, 38, .97), rgba(7, 14, 29, .97));
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 22px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .panel-title strong {
+      font-size: 14px;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .selection-count {
+      font-size: 12px;
+      color: #8fa5c9;
+    }
+
+    .selection-count b {
+      color: white;
+    }
+
+    /* Browser table */
+
+    .browser-list {
+      width: 100%;
+    }
+
+    .table-head,
+    .browser-row {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.5fr) 1fr 1fr;
+      align-items: center;
+    }
+
+    .table-head {
+      min-height: 50px;
+      color: #7186a9;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      background: rgba(3, 8, 20, .3);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-head > div {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-left: 1px solid var(--border);
+    }
+
+    .table-head > div:first-child {
+      justify-content: flex-start;
+      padding-left: 24px;
+      border-left: 0;
+    }
+
+    .browser-row {
+      min-height: 62px;
+      border-bottom: 1px solid rgba(29, 42, 69, .75);
+      transition: background .18s ease;
+    }
+
+    .browser-row:last-child {
+      border-bottom: 0;
+    }
+
+    .browser-row:hover {
+      background: rgba(43, 78, 133, .08);
+    }
+
+    .browser-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 24px;
+      min-width: 0;
+    }
+
+    .browser-logo {
+      width: 25px;
+      height: 25px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #101b31;
+      border: 1px solid #253552;
+    }
+
+    .browser-info {
+      min-width: 0;
+    }
+
+    .browser-info strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .browser-info small {
+      display: block;
+      color: #637594;
+      font-size: 10px;
+      margin-top: 3px;
+    }
+
+    .online {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 9px rgba(32, 216, 154, .65);
+      flex: 0 0 auto;
+    }
+
+    .offline {
+      background: #4c5c77;
+      box-shadow: none;
+    }
+
+    .cell {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-left: 1px solid var(--border);
+    }
+
+    /* Custom checkbox */
+
+    .check {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .check input {
+      position: absolute;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .checkmark {
+      position: absolute;
+      inset: 0;
+      border: 1px solid #43516b;
+      border-radius: 5px;
+      background: #111a2b;
+      transition: .18s ease;
+    }
+
+    .check:hover .checkmark {
+      border-color: #6382b5;
+      background: #17243c;
+    }
+
+    .check input:checked + .checkmark {
+      border-color: var(--blue);
+      background: var(--blue);
+      box-shadow: 0 0 14px rgba(79, 140, 255, .25);
+    }
+
+    .check input:checked + .checkmark::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 2px;
+      width: 5px;
+      height: 10px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    /* Footer actions */
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border-top: 1px solid var(--border);
+      background: rgba(4, 9, 20, .3);
+    }
+
+    .action-info {
+      color: #6f82a3;
+      font-size: 11px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 9px;
+    }
+
+    .btn {
+      border: 1px solid var(--border-light);
+      border-radius: 9px;
+      padding: 10px 15px;
+      color: #a7b9d5;
+      background: #101a2e;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: .18s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: #405579;
+      background: #14213a;
+      color: white;
+    }
+
+    .btn-primary {
+      color: white;
+      border-color: #3674e9;
+      background: linear-gradient(135deg, #397cf0, #2258c9);
+      box-shadow: 0 7px 20px rgba(37, 99, 235, .2);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #4a8aff, #2864db);
+      border-color: #5791ff;
+    }
+
+    .btn-danger {
+      color: #ffdbe0;
+      border-color: rgba(255, 93, 115, .25);
+      background: rgba(255, 93, 115, .08);
+    }
+
+    .btn-danger:hover {
+      color: white;
+      background: rgba(255, 93, 115, .16);
+      border-color: rgba(255, 93, 115, .45);
+    }
+
+    /* Domain */
+
+    .domain-section {
+      margin-top: 18px;
+      padding: 22px 24px 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .domain-heading {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .domain-icon {
+      width: 35px;
+      height: 35px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: #65a2ff;
+      background: #102143;
+      border: 1px solid #213b6a;
+    }
+
+    .domain-heading h2 {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .domain-heading p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .domain-form {
+      display: flex;
+      gap: 9px;
+    }
+
+    .input-wrap {
+      position: relative;
+      flex: 1;
+    }
+
+    .input-wrap span {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #5e7296;
+      font-size: 13px;
+    }
+
+    .domain-input {
+      width: 100%;
+      height: 43px;
+      padding: 0 14px 0 34px;
+      color: white;
+      outline: none;
+      border: 1px solid #293b5c;
+      border-radius: 9px;
+      background: #070f20;
+      font-size: 12px;
+      transition: .18s ease;
+    }
+
+    .domain-input::placeholder {
+      color: #536582;
+    }
+
+    .domain-input:focus {
+      border-color: #3e7dec;
+      box-shadow: 0 0 0 3px rgba(62, 125, 236, .1);
+    }
+
+    .domain-form .btn {
+      height: 43px;
+      padding: 0 19px;
+    }
+
+    /* Empty / info badge */
+
+    .tip {
+      margin-top: 14px;
+      padding: 11px 13px;
+      border: 1px solid #1d3456;
+      border-radius: 8px;
+      background: rgba(31, 75, 130, .08);
+      color: #7890b7;
+      font-size: 10px;
+    }
+
+    .tip b {
+      color: #a7c4f1;
+    }
+
+    /* Responsive */
+
+    @media (max-width: 760px) {
+      body {
+        padding: 15px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .status {
+        display: none;
+      }
+
+      .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .table-head {
+        display: none;
+      }
+
+      .browser-row {
+        grid-template-columns: 1fr auto auto;
+        min-height: 67px;
+      }
+
+      .browser-name {
+        padding-left: 16px;
+        padding-right: 10px;
+      }
+
+      .cell {
+        border-left: 0;
+        padding: 0 10px;
+      }
+
+      .actions {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .action-buttons {
+        width: 100%;
+      }
+
+      .action-buttons .btn {
+        flex: 1;
+      }
+
+      .domain-form {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .brand h1 {
+        font-size: 17px;
+      }
+
+      .brand p {
+        max-width: 260px;
+      }
+
+      .browser-info small {
+        display: none;
+      }
+
+      .browser-name {
+        gap: 8px;
+      }
+
+      .browser-logo {
+        width: 23px;
+        height: 23px;
+      }
+
+      .cell {
+        padding: 0 7px;
+      }
+
+      .actions,
+      .domain-section,
+      .panel-header {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">↻</div>
+
+        <div>
+          <h1>Borrar y respaldar navegadores</h1>
+          <p>Gestiona los datos de tus navegadores desde un solo lugar.</p>
+        </div>
+      </div>
+
+      <div class="status">
+        <span class="status-dot"></span>
+        Sistema listo
+      </div>
+    </header>
+
+
+    <section class="panel">
+
+      <div class="panel-header">
+        <div class="panel-title">
+          <strong>Administración de navegadores</strong>
+          <span>Selecciona las acciones que deseas realizar.</span>
+        </div>
+
+        <div class="selection-count">
+          <b id="selectedCount">0</b> seleccionados
+        </div>
+      </div>
+
+
+      <div class="browser-list">
+
+        <div class="table-head">
+          <div>Navegador</div>
+          <div>Borrar datos</div>
+          <div>Crear respaldo</div>
+        </div>
+
+
+        <!-- Chrome -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">🌐</div>
+            <div class="browser-info">
+              <strong>Google Chrome</strong>
+              <small>Chromium · Google</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Edge -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">◉</div>
+            <div class="browser-info">
+              <strong>Microsoft Edge</strong>
+              <small>Chromium · Microsoft</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Firefox -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">🦊</div>
+            <div class="browser-info">
+              <strong>Mozilla Firefox</strong>
+              <small>Gecko · Mozilla</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Brave -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">🛡</div>
+            <div class="browser-info">
+              <strong>Brave</strong>
+              <small>Chromium · Brave</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Opera -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">O</div>
+            <div class="browser-info">
+              <strong>Opera</strong>
+              <small>Chromium · Opera</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- GNOME -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online offline"></span>
+            <div class="browser-logo">◎</div>
+            <div class="browser-info">
+              <strong>GNOME Web</strong>
+              <small>WebKit · GNOME</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Chromium -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online offline"></span>
+            <div class="browser-logo">◈</div>
+            <div class="browser-info">
+              <strong>Chromium</strong>
+              <small>Chromium Project</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Vivaldi -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online"></span>
+            <div class="browser-logo">◉</div>
+            <div class="browser-info">
+              <strong>Vivaldi</strong>
+              <small>Chromium · Vivaldi</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- LibreWolf -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online offline"></span>
+            <div class="browser-logo">♧</div>
+            <div class="browser-info">
+              <strong>LibreWolf</strong>
+              <small>Firefox-based</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+
+        <!-- Zen -->
+        <div class="browser-row">
+          <div class="browser-name">
+            <span class="online offline"></span>
+            <div class="browser-logo">✣</div>
+            <div class="browser-info">
+              <strong>Zen Browser</strong>
+              <small>Firefox-based</small>
+            </div>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+
+          <div class="cell">
+            <label class="check">
+              <input type="checkbox" />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </div>
+
+      </div>
+
+
+      <div class="actions">
+        <div class="action-info">
+          Las acciones se ejecutarán únicamente sobre los elementos seleccionados.
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary" id="processDelete">
+            🗑 Borrar seleccionados
+          </button>
+
+          <button class="btn" id="processBackup">
+            💾 Crear respaldo
+          </button>
+        </div>
+      </div>
+
+
+      <section class="domain-section">
+
+        <div class="domain-heading">
+          <div class="domain-icon">⌁</div>
+
+          <div>
+            <h2>Borrar datos de un dominio</h2>
+            <p>
+              Introduce un dominio o pega una URL para eliminar únicamente
+              sus cookies, historial, permisos y datos guardados.
+            </p>
+          </div>
+        </div>
+
+
+        <div class="domain-form">
+          <div class="input-wrap">
+            <span>⌕</span>
+
+            <input
+              class="domain-input"
+              type="text"
+              placeholder="ejemplo.com"
+              id="domainInput"
+            />
+          </div>
+
+          <button class="btn btn-danger" id="deleteDomain">
+            ✕ Borrar dominio
+          </button>
+        </div>
+
+
+        <div class="tip">
+          <b>Consejo:</b>
+          puedes introducir tanto <b>ejemplo.com</b> como
+          <b>https://ejemplo.com/ruta</b>.
+        </div>
+
+      </section>
+
+    </section>
+
+  </main>
+
+
+  <script>
+    const checkboxes = document.querySelectorAll(
+      '.browser-row input[type="checkbox"]'
+    );
+
+    const selectedCount = document.getElementById('selectedCount');
+
+    function updateCount() {
+      selectedCount.textContent =
+        document.querySelectorAll(
+          '.browser-row input[type="checkbox"]:checked'
+        ).length;
+    }
+
+    checkboxes.forEach(check => {
+      check.addEventListener('change', updateCount);
+    });
+
+
+    document.getElementById('processDelete').addEventListener('click', () => {
+      const selected = document.querySelectorAll(
+        '.browser-row input[type="checkbox"]:checked'
+      ).length;
+
+      if (!selected) {
+        alert('Selecciona al menos un navegador para borrar sus datos.');
+        return;
+      }
+
+      alert(`Se procesarían ${selected} selección(es) de borrado.`);
+    });
+
+
+    document.getElementById('processBackup').addEventListener('click', () => {
+      const selected = document.querySelectorAll(
+        '.browser-row input[type="checkbox"]:checked'
+      ).length;
+
+      if (!selected) {
+        alert('Selecciona al menos un navegador para crear un respaldo.');
+        return;
+      }
+
+      alert(`Se crearían ${selected} respaldo(s).`);
+    });
+
+
+    document.getElementById('deleteDomain').addEventListener('click', () => {
+      const input = document.getElementById('domainInput');
+      const domain = input.value.trim();
+
+      if (!domain) {
+        input.focus();
+        alert('Introduce un dominio o una URL.');
+        return;
+      }
+
+      alert(`Se borrarían los datos asociados a: ${domain}`);
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrowserVault — Browser Data Manager</title>
+<style>
+  :root{
+    --bg-0:#06090f;
+    --bg-1:#0a0f18;
+    --bg-2:#0d1420;
+    --panel:#0f1622;
+    --panel-hi:#131b29;
+    --border:rgba(148,168,200,0.09);
+    --border-strong:rgba(148,168,200,0.16);
+    --text-0:#eef2f8;
+    --text-1:#aab6c8;
+    --text-2:#6d7a90;
+    --text-3:#4c5567;
+    --accent:#3ea6ff;
+    --accent-2:#7dd3ff;
+    --accent-dim:rgba(62,166,255,0.12);
+    --accent-border:rgba(62,166,255,0.35);
+    --green:#3ddc97;
+    --green-dim:rgba(61,220,151,0.12);
+    --amber:#f0b93d;
+    --red:#ff5d6c;
+    --red-dim:rgba(255,93,108,0.12);
+    --radius-lg:16px;
+    --radius-md:12px;
+    --radius-sm:8px;
+    --shadow-lg:0 20px 60px -20px rgba(0,0,0,0.6), 0 4px 16px -4px rgba(0,0,0,0.4);
+    --shadow-md:0 10px 30px -12px rgba(0,0,0,0.55);
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html,body{height:100%;}
+
+  body{
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(62,166,255,0.06), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(61,220,151,0.04), transparent 55%),
+      var(--bg-0);
+    color:var(--text-0);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  ::selection{background:var(--accent-dim);color:var(--accent-2);}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(148,168,200,0.15);border-radius:8px;border:2px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(148,168,200,0.28);background-clip:padding-box;}
+
+  a,button{font-family:inherit;}
+  button{cursor:pointer;border:none;background:none;color:inherit;}
+  button:disabled{cursor:not-allowed;opacity:0.45;}
+  input{font-family:inherit;}
+
+  .app{
+    max-width:1280px;
+    margin:0 auto;
+    padding:20px 28px 120px;
+  }
+
+  /* ---------- HEADER ---------- */
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
+    padding:14px 20px;
+    background:linear-gradient(180deg, rgba(19,27,41,0.7), rgba(15,22,34,0.5));
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    backdrop-filter:blur(20px);
+    margin-bottom:22px;
+    position:sticky;
+    top:14px;
+    z-index:40;
+    box-shadow:var(--shadow-md);
+  }
+
+  .brand{display:flex;align-items:center;gap:12px;}
+
+  .brand-mark{
+    width:38px;height:38px;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(145deg, rgba(62,166,255,0.22), rgba(62,166,255,0.05));
+    border:1px solid var(--accent-border);
+    box-shadow:0 0 0 1px rgba(62,166,255,0.05), inset 0 1px 0 rgba(255,255,255,0.06);
+    color:var(--accent-2);
+    flex-shrink:0;
+  }
+  .brand-mark svg{width:19px;height:19px;}
+
+  .brand-text h1{
+    font-size:15.5px;font-weight:650;letter-spacing:-0.01em;color:var(--text-0);
+    display:flex;align-items:center;gap:8px;
+  }
+  .brand-text p{font-size:11.5px;color:var(--text-2);margin-top:1px;letter-spacing:0.01em;}
+
+  .pulse-dot{
+    width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 0 0 rgba(61,220,151,0.6);
+    animation:pulse 2.4s infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(61,220,151,0.45);}
+    70%{box-shadow:0 0 0 6px rgba(61,220,151,0);}
+    100%{box-shadow:0 0 0 0 rgba(61,220,151,0);}
+  }
+
+  .top-right{display:flex;align-items:center;gap:10px;}
+
+  .status-chip{
+    display:flex;align-items:center;gap:7px;
+    padding:6px 12px 6px 10px;
+    border-radius:999px;
+    background:var(--green-dim);
+    border:1px solid rgba(61,220,151,0.25);
+    color:#8bf0c4;
+    font-size:11.5px;font-weight:600;letter-spacing:0.02em;
+  }
+  .status-chip .pulse-dot{background:var(--green);}
+
+  .version-tag{
+    font-size:11px;color:var(--text-3);
+    padding:6px 10px;border:1px solid var(--border);border-radius:8px;
+    letter-spacing:0.02em;
+  }
+
+  .icon-btn{
+    width:34px;height:34px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--border);color:var(--text-2);
+    transition:all .18s var(--ease);
+  }
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--text-0);background:rgba(255,255,255,0.03);}
+  .icon-btn svg{width:16px;height:16px;}
+
+  .avatar{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(135deg,#2a3648,#161d29);
+    border:1px solid var(--border-strong);
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;color:var(--accent-2);
+  }
+
+  /* ---------- SECTION TITLES ---------- */
+  .section-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin:34px 0 14px;
+    gap:12px;flex-wrap:wrap;
+  }
+  .section-head h2{font-size:13px;font-weight:650;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-1);}
+  .section-head .hint{font-size:12px;color:var(--text-3);}
+  .section-head:first-of-type{margin-top:6px;}
+
+  /* ---------- OVERVIEW ---------- */
+  .overview{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+  }
+  .stat-card{
+    background:linear-gradient(180deg, var(--panel-hi), var(--panel));
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+    transition:border-color .2s var(--ease), transform .2s var(--ease);
+  }
+  .stat-card:hover{border-color:var(--border-strong);transform:translateY(-1px);}
+  .stat-card::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(120px 60px at 90% 0%, rgba(62,166,255,0.08), transparent 70%);
+    pointer-events:none;
+  }
+  .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .stat-icon{
+    width:26px;height:26px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent-dim);color:var(--accent-2);
+  }
+  .stat-icon svg{width:14px;height:14px;}
+  .stat-icon.green{background:var(--green-dim);color:var(--green);}
+  .stat-icon.amber{background:rgba(240,185,61,0.12);color:var(--amber);}
+  .stat-value{font-size:24px;font-weight:700;letter-spacing:-0.02em;color:var(--text-0);}
+  .stat-label{font-size:11.5px;color:var(--text-2);margin-top:2px;}
+  .stat-trend{font-size:10.5px;color:var(--text-3);margin-top:8px;display:flex;align-items:center;gap:4px;}
+
+  /* ---------- LAYOUT GRID ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    gap:20px;
+    align-items:start;
+  }
+
+  .col-main{display:flex;flex-direction:column;gap:0;}
+  .col-side{display:flex;flex-direction:column;gap:16px;}
+
+  .panel{
+    background:linear-gradient(180deg, var(--panel-hi), var(--panel));
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:18px;
+  }
+
+  /* ---------- BROWSER LIST ---------- */
+  .browser-list{display:flex;flex-direction:column;gap:8px;}
+
+  .browser-row{
+    background:linear-gradient(180deg, var(--panel-hi), var(--panel));
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:14px 16px;
+    transition:border-color .18s var(--ease), background .18s var(--ease);
+  }
+  .browser-row.selected{border-color:var(--accent-border);background:linear-gradient(180deg, rgba(62,166,255,0.07), rgba(15,22,34,0.6));}
+  .browser-row:hover{border-color:var(--border-strong);}
+
+  .browser-main{
+    display:flex;align-items:center;gap:14px;
+  }
+
+  .check-toggle{
+    width:20px;height:20px;border-radius:6px;
+    border:1.5px solid var(--border-strong);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    transition:all .16s var(--ease);
+    background:rgba(255,255,255,0.02);
+  }
+  .check-toggle svg{width:12px;height:12px;opacity:0;transform:scale(.5);transition:all .16s var(--ease);color:#fff;}
+  .browser-row.selected .check-toggle{background:var(--accent);border-color:var(--accent);}
+  .browser-row.selected .check-toggle svg{opacity:1;transform:scale(1);}
+
+  .browser-icon{
+    width:38px;height:38px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .browser-icon svg{width:20px;height:20px;}
+
+  .browser-id{flex:1;min-width:0;}
+  .browser-id-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .browser-name{font-size:13.5px;font-weight:600;color:var(--text-0);}
+  .badge{
+    font-size:10px;font-weight:650;letter-spacing:0.03em;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px;
+  }
+  .badge.engine{background:rgba(148,168,200,0.08);color:var(--text-2);}
+  .badge.active{background:var(--green-dim);color:#8bf0c4;}
+  .badge.detected{background:rgba(148,168,200,0.08);color:var(--text-3);}
+
+  .browser-meta{font-size:11.5px;color:var(--text-3);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;}
+  .browser-meta span{display:flex;align-items:center;gap:4px;}
+  .dot{width:3px;height:3px;border-radius:50%;background:var(--text-3);display:inline-block;}
+
+  .browser-data-found{
+    font-size:11px;color:var(--text-2);text-align:right;flex-shrink:0;
+    display:none;
+  }
+  .browser-data-found b{color:var(--text-0);font-weight:650;}
+
+  .expand-btn{
+    width:30px;height:30px;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--text-3);border:1px solid transparent;
+    transition:all .16s var(--ease);
+    flex-shrink:0;
+  }
+  .expand-btn:hover{color:var(--text-0);background:rgba(255,255,255,0.04);}
+  .expand-btn svg{width:15px;height:15px;transition:transform .2s var(--ease);}
+  .browser-row.expanded .expand-btn svg{transform:rotate(180deg);}
+
+  /* ---------- ACTIONS GRID (expanded) ---------- */
+  .actions-wrap{
+    display:grid;grid-template-rows:0fr;
+    transition:grid-template-rows .28s var(--ease);
+  }
+  .browser-row.expanded .actions-wrap{grid-template-rows:1fr;}
+  .actions-inner{overflow:hidden;}
+
+  .actions-grid{
+    margin-top:14px;padding-top:14px;
+    border-top:1px solid var(--border);
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+  }
+
+  .action-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    padding:12px;
+    background:rgba(255,255,255,0.015);
+    display:flex;flex-direction:column;gap:10px;
+    transition:border-color .16s var(--ease);
+  }
+  .action-card.on{border-color:var(--accent-border);background:var(--accent-dim);}
+  .action-card.op-clean.on{border-color:rgba(255,93,108,0.35);background:var(--red-dim);}
+  .action-card.op-backup.on{border-color:var(--accent-border);background:var(--accent-dim);}
+  .action-card.op-bookmarks.on{border-color:rgba(240,185,61,0.35);background:rgba(240,185,61,0.08);}
+  .action-card.op-passwords.on{border-color:rgba(61,220,151,0.35);background:var(--green-dim);}
+
+  .action-top{display:flex;align-items:center;justify-content:space-between;}
+  .action-id{display:flex;align-items:center;gap:8px;}
+  .action-icon{
+    width:24px;height:24px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,0.05);color:var(--text-1);
+  }
+  .action-icon svg{width:13px;height:13px;}
+  .action-name{font-size:12px;font-weight:600;color:var(--text-0);}
+
+  .switch{
+    width:32px;height:18px;border-radius:999px;
+    background:rgba(148,168,200,0.15);
+    position:relative;flex-shrink:0;
+    transition:background .18s var(--ease);
+    border:1px solid transparent;
+  }
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;
+    width:12px;height:12px;border-radius:50%;background:#cbd4e0;
+    transition:transform .18s var(--ease), background .18s var(--ease);
+  }
+  .switch.on{background:var(--accent);}
+  .switch.on::after{transform:translateX(14px);background:#fff;}
+  .action-card.op-clean .switch.on{background:var(--red);}
+  .action-card.op-bookmarks .switch.on{background:var(--amber);}
+  .action-card.op-passwords .switch.on{background:var(--green);}
+
+  .action-desc{font-size:10.5px;color:var(--text-3);line-height:1.4;}
+
+  .details-link{
+    align-self:flex-start;
+    display:flex;align-items:center;gap:5px;
+    font-size:10.5px;font-weight:600;color:var(--text-2);
+    padding:5px 8px;border-radius:6px;border:1px solid var(--border);
+    transition:all .16s var(--ease);
+    margin-top:auto;
+  }
+  .details-link:hover{color:var(--text-0);border-color:var(--border-strong);background:rgba(255,255,255,0.03);}
+  .details-link svg{width:10px;height:10px;}
+
+  /* ---------- SIDE PANELS ---------- */
+  .panel h3{
+    font-size:12.5px;font-weight:650;color:var(--text-0);
+    display:flex;align-items:center;gap:8px;margin-bottom:4px;
+  }
+  .panel h3 svg{width:15px;height:15px;color:var(--accent-2);}
+  .panel .sub{font-size:11px;color:var(--text-3);margin-bottom:14px;}
+
+  /* domain cleanup */
+  .domain-input-row{display:flex;gap:8px;margin-bottom:10px;}
+  .domain-input-row input{
+    flex:1;background:var(--bg-1);border:1px solid var(--border);
+    border-radius:9px;padding:9px 12px;color:var(--text-0);font-size:12.5px;
+    transition:border-color .16s var(--ease);
+  }
+  .domain-input-row input::placeholder{color:var(--text-3);}
+  .domain-input-row input:focus{outline:none;border-color:var(--accent-border);box-shadow:0 0 0 3px rgba(62,166,255,0.1);}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    font-size:12px;font-weight:600;
+    padding:9px 14px;border-radius:9px;
+    border:1px solid transparent;
+    transition:all .16s var(--ease);
+    white-space:nowrap;
+  }
+  .btn svg{width:13px;height:13px;}
+  .btn-primary{background:var(--accent);color:#031321;}
+  .btn-primary:hover:not(:disabled){background:var(--accent-2);}
+  .btn-ghost{background:rgba(255,255,255,0.03);color:var(--text-1);border-color:var(--border);}
+  .btn-ghost:hover:not(:disabled){color:var(--text-0);border-color:var(--border-strong);background:rgba(255,255,255,0.05);}
+  .btn-danger{background:var(--red);color:#2a0508;}
+  .btn-danger:hover:not(:disabled){background:#ff7885;}
+  .btn-outline-danger{background:transparent;border-color:rgba(255,93,108,0.4);color:#ff8a94;}
+  .btn-outline-danger:hover:not(:disabled){background:var(--red-dim);}
+  .btn-sm{padding:7px 11px;font-size:11.5px;border-radius:8px;}
+  .btn-block{width:100%;}
+
+  .domain-results{display:none;flex-direction:column;gap:8px;margin-top:4px;}
+  .domain-result-row{
+    display:flex;align-items:center;justify-content:between;gap:10px;
+    padding:9px 10px;border:1px solid var(--border);border-radius:8px;
+    background:rgba(255,255,255,0.015);
+    font-size:11px;
+  }
+  .domain-result-row .drr-name{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--text-0);flex:1;}
+  .domain-result-row .drr-icon{width:18px;height:18px;flex-shrink:0;}
+  .domain-result-row .drr-icon svg{width:100%;height:100%;}
+  .domain-result-row .drr-meta{color:var(--text-3);font-size:10.5px;white-space:nowrap;}
+
+  .domain-total{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 0 10px;margin-top:6px;border-top:1px solid var(--border);
+  }
+  .domain-total .label{font-size:11px;color:var(--text-3);}
+  .domain-total .value{font-size:19px;font-weight:700;color:var(--text-0);}
+
+  .scan-state{
+    display:none;align-items:center;gap:8px;font-size:11.5px;color:var(--accent-2);
+    padding:10px 0;
+  }
+  .spinner{
+    width:13px;height:13px;border-radius:50%;
+    border:2px solid rgba(62,166,255,0.25);border-top-color:var(--accent-2);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* activity log */
+  .activity-list{display:flex;flex-direction:column;}
+  .activity-item{
+    display:flex;gap:12px;padding:10px 0;
+    border-bottom:1px solid var(--border);
+    animation:fadeIn .3s var(--ease);
+  }
+  .activity-item:last-child{border-bottom:none;padding-bottom:0;}
+  .activity-item:first-child{padding-top:0;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+  .activity-time{font-size:10.5px;color:var(--text-3);width:38px;flex-shrink:0;padding-top:1px;font-variant-numeric:tabular-nums;}
+  .activity-dot-col{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+  .activity-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0;}
+  .activity-dot.green{background:var(--green);}
+  .activity-dot.amber{background:var(--amber);}
+  .activity-line{width:1px;flex:1;background:var(--border);margin-top:4px;}
+  .activity-body{flex:1;padding-bottom:2px;}
+  .activity-title{font-size:12px;color:var(--text-0);font-weight:600;}
+  .activity-sub{font-size:11px;color:var(--text-3);margin-top:1px;}
+
+  /* system status */
+  .status-list{display:flex;flex-direction:column;gap:11px;}
+  .status-row{display:flex;align-items:center;justify-content:space-between;}
+  .status-row .sr-label{font-size:12px;color:var(--text-1);display:flex;align-items:center;gap:8px;}
+  .status-row .sr-label svg{width:14px;height:14px;color:var(--text-3);}
+  .status-row .sr-val{font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .status-ok{color:#8bf0c4;}
+  .status-ok .dot2{background:var(--green);}
+  .dot2{width:6px;height:6px;border-radius:50%;box-shadow:0 0 0 3px rgba(61,220,151,0.12);}
+
+  /* ---------- GLOBAL ACTION BAR ---------- */
+  .action-bar{
+    position:fixed;left:50%;bottom:22px;transform:translate(-50%, 140%);
+    display:flex;align-items:center;gap:14px;
+    padding:12px 14px 12px 18px;
+    background:rgba(15,22,34,0.85);
+    border:1px solid var(--border-strong);
+    border-radius:16px;
+    backdrop-filter:blur(24px);
+    box-shadow:var(--shadow-lg);
+    z-index:60;
+    transition:transform .3s var(--ease);
+  }
+  .action-bar.show{transform:translate(-50%,0);}
+  .ab-count{display:flex;flex-direction:column;gap:1px;}
+  .ab-count .n{font-size:13px;font-weight:700;color:var(--text-0);}
+  .ab-count .q{font-size:10px;color:var(--text-3);}
+  .ab-sep{width:1px;height:26px;background:var(--border);}
+  .ab-actions{display:flex;align-items:center;gap:8px;}
+
+  /* ---------- DRAWER ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(4,7,12,0.6);backdrop-filter:blur(3px);
+    opacity:0;pointer-events:none;transition:opacity .22s var(--ease);z-index:80;
+  }
+  .overlay.show{opacity:1;pointer-events:auto;}
+
+  .drawer{
+    position:fixed;top:0;right:0;height:100%;width:420px;max-width:92vw;
+    background:linear-gradient(180deg, #101826, #0b111a);
+    border-left:1px solid var(--border-strong);
+    box-shadow:-30px 0 60px -20px rgba(0,0,0,0.6);
+    transform:translateX(100%);
+    transition:transform .3s var(--ease);
+    z-index:90;
+    display:flex;flex-direction:column;
+  }
+  .drawer.show{transform:translateX(0);}
+
+  .drawer-head{
+    padding:20px 22px;border-bottom:1px solid var(--border);
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  }
+  .drawer-head-left{display:flex;gap:12px;}
+  .drawer-icon{
+    width:38px;height:38px;border-radius:10px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent-dim);color:var(--accent-2);border:1px solid var(--accent-border);
+  }
+  .drawer-icon svg{width:19px;height:19px;}
+  .drawer-icon.danger{background:var(--red-dim);color:#ff8a94;border-color:rgba(255,93,108,0.3);}
+  .drawer-icon.green{background:var(--green-dim);color:var(--green);border-color:rgba(61,220,151,0.3);}
+  .drawer-title{font-size:15px;font-weight:650;color:var(--text-0);}
+  .drawer-sub{font-size:11.5px;color:var(--text-3);margin-top:2px;}
+  .drawer-close{
+    width:30px;height:30px;border-radius:8px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:var(--text-2);
+    transition:all .16s var(--ease);
+  }
+  .drawer-close:hover{color:var(--text-0);background:rgba(255,255,255,0.05);}
+  .drawer-close svg{width:15px;height:15px;}
+
+  .drawer-body{flex:1;overflow-y:auto;padding:20px 22px;}
+
+  .option-row{
+    display:flex;align-items:flex-start;gap:12px;padding:11px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .option-row:last-child{border-bottom:none;}
+  .opt-check{
+    width:19px;height:19px;border-radius:6px;border:1.5px solid var(--border-strong);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
+    transition:all .16s var(--ease);background:rgba(255,255,255,0.02);
+  }
+  .opt-check svg{width:11px;height:11px;opacity:0;transform:scale(.5);transition:all .16s var(--ease);color:#fff;}
+  .option-row.checked .opt-check{background:var(--accent);border-color:var(--accent);}
+  .option-row.checked .opt-check svg{opacity:1;transform:scale(1);}
+  .drawer.danger .option-row.checked .opt-check{background:var(--red);border-color:var(--red);}
+  .drawer.green .option-row.checked .opt-check{background:var(--green);border-color:var(--green);}
+
+  .opt-text{flex:1;}
+  .opt-name{font-size:12.5px;font-weight:600;color:var(--text-0);}
+  .opt-desc{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.4;}
+  .opt-size{font-size:10.5px;color:var(--text-2);font-variant-numeric:tabular-nums;flex-shrink:0;margin-top:1px;}
+
+  .drawer-note{
+    display:flex;gap:10px;padding:12px 13px;border-radius:10px;
+    background:rgba(62,166,255,0.06);border:1px solid rgba(62,166,255,0.18);
+    font-size:11.5px;color:#bcd9f5;line-height:1.5;margin-bottom:18px;
+  }
+  .drawer-note.safe{background:var(--green-dim);border-color:rgba(61,220,151,0.22);color:#bdf3d8;}
+  .drawer-note svg{width:16px;height:16px;flex-shrink:0;margin-top:1px;color:inherit;}
+
+  .field-block{margin-bottom:18px;}
+  .field-label{font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);margin-bottom:8px;}
+  .field-value-box{
+    background:var(--bg-1);border:1px solid var(--border);border-radius:9px;
+    padding:10px 12px;font-size:12px;color:var(--text-1);font-family:'SFMono-Regular',Consolas,monospace;
+  }
+
+  .format-options{display:flex;gap:8px;}
+  .format-opt{
+    flex:1;text-align:center;padding:10px 8px;border:1px solid var(--border);border-radius:9px;
+    font-size:11.5px;font-weight:600;color:var(--text-2);transition:all .16s var(--ease);
+  }
+  .format-opt.active{border-color:var(--green);background:var(--green-dim);color:#a9f5d1;}
+  .format-opt:hover{border-color:var(--border-strong);}
+
+  .toggle-line{display:flex;align-items:center;justify-content:space-between;padding:4px 0;}
+  .toggle-line .tl-label{font-size:12px;color:var(--text-1);}
+
+  .estimate-box{
+    margin-top:6px;padding:14px 16px;border-radius:12px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .estimate-box .el{font-size:11px;color:var(--text-3);}
+  .estimate-box .ev{font-size:20px;font-weight:700;color:var(--text-0);margin-top:2px;}
+
+  .drawer-foot{
+    padding:16px 22px 20px;border-top:1px solid var(--border);
+    display:flex;gap:10px;
+  }
+  .drawer-foot .btn{flex:1;}
+
+  .progress-track{
+    height:5px;border-radius:99px;background:rgba(148,168,200,0.12);overflow:hidden;margin-top:14px;display:none;
+  }
+  .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px;transition:width .3s var(--ease);}
+  .progress-label{font-size:10.5px;color:var(--text-3);margin-top:7px;display:none;}
+
+  /* toast */
+  .toast-stack{
+    position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:120;
+    width:320px;max-width:calc(100vw - 40px);
+  }
+  .toast{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:12px 14px;border-radius:11px;
+    background:rgba(15,22,34,0.92);border:1px solid var(--border-strong);
+    box-shadow:var(--shadow-md);
+    backdrop-filter:blur(16px);
+    animation:toastIn .28s var(--ease);
+  }
+  @keyframes toastIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+  .toast.out{animation:toastOut .22s var(--ease) forwards;}
+  @keyframes toastOut{to{opacity:0;transform:translateX(20px);}}
+  .toast-icon{width:18px;height:18px;color:var(--green);flex-shrink:0;margin-top:1px;}
+  .toast-icon svg{width:100%;height:100%;}
+  .toast.info .toast-icon{color:var(--accent-2);}
+  .toast.warn .toast-icon{color:var(--amber);}
+  .toast-text .tt-title{font-size:12px;font-weight:650;color:var(--text-0);}
+  .toast-text .tt-sub{font-size:11px;color:var(--text-3);margin-top:1px;}
+
+  footer.foot{
+    margin-top:40px;padding-top:18px;border-top:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:11px;color:var(--text-3);
+  }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width:1100px){
+    .layout{grid-template-columns:1fr;}
+    .col-side{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  }
+  @media (max-width:820px){
+    .overview{grid-template-columns:repeat(2,1fr);}
+    .actions-grid{grid-template-columns:repeat(2,1fr);}
+    .col-side{grid-template-columns:1fr;}
+    .app{padding:16px 16px 120px;}
+  }
+  @media (max-width:520px){
+    header.top{flex-wrap:wrap;position:static;}
+    .top-right{width:100%;justify-content:space-between;}
+    .browser-main{flex-wrap:wrap;}
+    .browser-data-found{display:none !important;}
+    .actions-grid{grid-template-columns:1fr;}
+    .drawer{width:100%;}
+    .action-bar{width:calc(100% - 24px);bottom:14px;flex-wrap:wrap;justify-content:center;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 3 6v6c0 5 3.8 8.7 9 10 5.2-1.3 9-5 9-10V6l-9-4Z"/>
+          <path d="M9 12.5l2 2 4-4.5"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>BrowserVault <span class="pulse-dot"></span></h1>
+        <p>Browser Data Manager</p>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="status-chip"><span class="pulse-dot"></span> System Ready</div>
+      <div class="version-tag">v2.4.1</div>
+      <button class="icon-btn" title="Settings" id="btnSettings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+      <div class="avatar">AS</div>
+    </div>
+  </header>
+
+  <!-- OVERVIEW -->
+  <div class="section-head"><h2>Browser Environment</h2><span class="hint">Real-time detection across this device</span></div>
+  <div class="overview">
+    <div class="stat-card">
+      <div class="stat-top"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div></div>
+      <div class="stat-value" id="statTotal">10</div>
+      <div class="stat-label">Browsers detected</div>
+      <div class="stat-trend">Across Chromium, Gecko &amp; WebKit</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></div></div>
+      <div class="stat-value" id="statActive">5</div>
+      <div class="stat-label">Active</div>
+      <div class="stat-trend">Used within last 24h</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg></div></div>
+      <div class="stat-value">2.4 GB</div>
+      <div class="stat-label">Available browser data</div>
+      <div class="stat-trend">Cookies, cache &amp; storage combined</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div></div>
+      <div class="stat-value">Just now</div>
+      <div class="stat-label">Last scan</div>
+      <div class="stat-trend" id="scanFreshness">Auto-refreshes every 5 min</div>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="layout">
+    <div class="col-main">
+      <div class="section-head"><h2>Browser Control Center</h2><span class="hint" id="selectionHint">Select browsers to queue operations</span></div>
+      <div class="browser-list" id="browserList"></div>
+    </div>
+
+    <div class="col-side">
+      <div class="panel" id="domainPanel">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg> Domain Cleanup</h3>
+        <p class="sub">Remove browser data associated with a specific website.</p>
+        <div class="domain-input-row">
+          <input type="text" id="domainInput" placeholder="example.com" />
+          <button class="btn btn-primary" id="btnAnalyze">Analyze</button>
+        </div>
+        <div class="scan-state" id="scanState"><span class="spinner"></span> Scanning browsers…</div>
+        <div class="domain-results" id="domainResults"></div>
+        <div class="domain-total" id="domainTotal" style="display:none;">
+          <div><div class="label">Total removable data</div><div class="value" id="domainTotalValue">0 MB</div></div>
+          <button class="btn btn-outline-danger btn-sm" id="btnRemoveDomain">Remove Domain Data</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 6v6c0 5 3.8 8.7 9 10 5.2-1.3 9-5 9-10V6l-9-4Z"/></svg> System Status</h3>
+        <p class="sub">Live subsystem diagnostics</p>
+        <div class="status-list">
+          <div class="status-row">
+            <div class="sr-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>Browser detection</div>
+            <div class="sr-val status-ok"><span class="dot2"></span>Operational</div>
+          </div>
+          <div class="status-row">
+            <div class="sr-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8v13H3V8M1 3h22v5H1z"/></svg>Backup engine</div>
+            <div class="sr-val status-ok"><span class="dot2"></span>Ready</div>
+          </div>
+          <div class="status-row">
+            <div class="sr-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Encryption</div>
+            <div class="sr-val status-ok"><span class="dot2"></span>AES-256 enabled</div>
+          </div>
+          <div class="status-row">
+            <div class="sr-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>Storage</div>
+            <div class="sr-val status-ok"><span class="dot2"></span>128 GB available</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg> Activity Log</h3>
+        <p class="sub">Recent operations on this device</p>
+        <div class="activity-list" id="activityList"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span>BrowserVault © 2026 · Local-only processing</span>
+    <span>All operations run on-device</span>
+  </footer>
+</div>
+
+<!-- GLOBAL ACTION BAR -->
+<div class="action-bar" id="actionBar">
+  <div class="ab-count">
+    <span class="n" id="abCount">0 browsers selected</span>
+    <span class="q" id="abQueue">0 operations queued</span>
+  </div>
+  <div class="ab-sep"></div>
+  <div class="ab-actions">
+    <button class="btn btn-outline-danger btn-sm" id="btnCleanSelected">Clean Selected</button>
+    <button class="btn btn-ghost btn-sm" id="btnBackupSelected">Backup Selected</button>
+    <button class="btn btn-ghost btn-sm" id="btnClearSelection">Clear Selection</button>
+  </div>
+</div>
+
+<!-- DRAWER -->
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-head-left">
+      <div class="drawer-icon" id="drawerIcon"></div>
+      <div>
+        <div class="drawer-title" id="drawerTitle">Clean browser data</div>
+        <div class="drawer-sub" id="drawerSub">Chrome</div>
+      </div>
+    </div>
+    <button class="drawer-close" id="drawerClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot" id="drawerFoot"></div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- ICONS ---------------- */
+  const icon = (name) => {
+    const icons = {
+      chrome:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 3v6M5.6 16.5l5.2-3M18.4 16.5l-5.2-3"/></svg>',
+      edge:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12c0-4.4 3.6-8 8-8 3.6 0 6 2 7 4.5"/><path d="M20 13c-1 4-4.5 7-9 7-4 0-7-2.7-7-6.3 0-3 2-5.2 5-5.2 2.6 0 4.4 1.7 4.4 3.8 0 1.6-1 2.7-2.4 2.7-1 0-1.7-.6-1.7-1.5"/></svg>',
+      firefox:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3c4.5 0 8 3.6 8 8.4 0 1.7-.4 3-1.1 4.2"/><path d="M12 21c-4.5 0-8-3.6-8-8.2 0-3.6 1.8-6 3.6-7.3"/><circle cx="14.5" cy="10" r="2.6"/></svg>',
+      brave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 5 5v6c0 5 3 8.5 7 10 4-1.5 7-5 7-10V5l-7-3Z"/><path d="M9 11l3 3 4-5"/></svg>',
+      opera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="12" rx="5.5" ry="9"/><ellipse cx="12" cy="12" rx="9" ry="9"/></svg>',
+      epiphany:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 9h18M3 15h18"/></svg>',
+      chromium:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="3.2"/></svg>',
+      vivaldi:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 20 12l-8 9-8-9 8-9Z"/></svg>',
+      librewolf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3c4.5 0 8 3.6 8 8.4 0 4.6-3.5 8.3-8 9.6-4.5-1.3-8-5-8-9.6C4 6.6 7.5 3 12 3Z"/><path d="M9 12l2 2 4-4.5"/></svg>',
+      zen:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16" stroke-dasharray="1 3.2"/></svg>',
+      clean:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+      backup:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8v13H3V8M1 3h22v5H1z"/><path d="M10 12h4"/></svg>',
+      bookmarks:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3Z"/></svg>',
+      passwords:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="15.3" r="1.2"/></svg>',
+      check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>',
+      chevron:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>',
+      arrow:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>',
+      shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 6v6c0 5 3.8 8.7 9 10 5.2-1.3 9-5 9-10V6l-9-4Z"/></svg>',
+      lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+      info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>',
+      toastOk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+    };
+    return icons[name] || '';
+  };
+
+  /* ---------------- DATA ---------------- */
+  const OPS = {
+    clean:     { label:'Clean',     desc:'Erase browsing data', icon:'clean',     cls:'op-clean' },
+    backup:    { label:'Backup',    desc:'Save full profile',   icon:'backup',    cls:'op-backup' },
+    bookmarks: { label:'Bookmarks', desc:'Export saved links',  icon:'bookmarks', cls:'op-bookmarks' },
+    passwords: { label:'Passwords', desc:'Encrypted export',    icon:'passwords', cls:'op-passwords' },
+  };
+
+  const BROWSERS = [
+    { id:'chrome',    name:'Google Chrome',  engine:'Chromium', version:'v140.0', status:'active',   last:'2 min ago',  found:'214 MB' },
+    { id:'edge',      name:'Microsoft Edge', engine:'Chromium', version:'v140.0', status:'active',   last:'11 min ago', found:'188 MB' },
+    { id:'firefox',   name:'Mozilla Firefox',engine:'Gecko',    version:'v142.0', status:'active',   last:'1 h ago',    found:'96 MB' },
+    { id:'brave',     name:'Brave',          engine:'Chromium', version:'v1.82',  status:'active',   last:'3 h ago',    found:'142 MB' },
+    { id:'opera',     name:'Opera',          engine:'Chromium', version:'v121',   status:'active',   last:'Yesterday',  found:'54 MB' },
+    { id:'epiphany',  name:'GNOME Web',      engine:'WebKit',   version:'v45.1',  status:'detected', last:'—',          found:'12 MB' },
+    { id:'chromium',  name:'Chromium',       engine:'Chromium', version:'v139.0', status:'detected', last:'—',          found:'8 MB' },
+    { id:'vivaldi',   name:'Vivaldi',        engine:'Chromium', version:'v6.9',   status:'active',   last:'4 h ago',    found:'71 MB' },
+    { id:'librewolf', name:'LibreWolf',      engine:'Gecko',    version:'v131.0', status:'detected', last:'—',          found:'19 MB' },
+    { id:'zen',       name:'Zen Browser',    engine:'Gecko',    version:'v1.4',   status:'detected', last:'—',          found:'6 MB' },
+  ];
+
+  const CLEAN_OPTIONS = [
+    { key:'history',    name:'Browsing history',  desc:'URLs, timestamps and visit count', size:'0.42 GB', checked:true },
+    { key:'cookies',    name:'Cookies',            desc:'Session tokens and site preferences', size:'0.61 GB', checked:true },
+    { key:'cache',      name:'Cached files',       desc:'Images, scripts and static assets', size:'0.81 GB', checked:true },
+    { key:'downloads',  name:'Download history',   desc:'List of previously downloaded files', size:'0.02 GB', checked:false },
+    { key:'formdata',   name:'Form data',          desc:'Autofill values for form fields', size:'0.01 GB', checked:false },
+    { key:'permissions',name:'Site permissions',   desc:'Camera, mic, location, notifications', size:'0.00 GB', checked:false },
+    { key:'sessions',   name:'Active sessions',    desc:'Signs you out of open sites', size:'0.03 GB', checked:false },
+    { key:'localstorage',name:'Local storage',     desc:'App data stored locally by websites', size:'0.19 GB', checked:false },
+  ];
+
+  const BACKUP_OPTIONS = [
+    { key:'profile',    name:'Profile settings', desc:'Theme, preferences and configuration', size:'12 MB', checked:true },
+    { key:'bookmarks',  name:'Bookmarks',        desc:'Saved links and folder structure', size:'3 MB', checked:true },
+    { key:'extensions', name:'Extensions',       desc:'Installed extensions and their settings', size:'146 MB', checked:true },
+    { key:'cookies',    name:'Cookies',          desc:'Session and preference cookies', size:'54 MB', checked:true },
+    { key:'history',    name:'History',          desc:'Full browsing history archive', size:'211 MB', checked:false },
+    { key:'localstorage',name:'Local storage',   desc:'Site-stored application data', size:'58 MB', checked:false },
+    { key:'preferences',name:'Preferences',      desc:'Advanced flags and internal settings', size:'2 MB', checked:false },
+  ];
+
+  /* ---------------- STATE ---------------- */
+  const state = {
+    selected: new Set(),
+    expanded: new Set(),
+    ops: {}, // browserId -> {clean:bool, backup:bool, bookmarks:bool, passwords:bool}
+  };
+  BROWSERS.forEach(b => state.ops[b.id] = { clean:false, backup:false, bookmarks:false, passwords:false });
+
+  const $ = (sel, ctx=document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
+
+  /* ---------------- RENDER BROWSER LIST ---------------- */
+  const listEl = $('#browserList');
+
+  function renderBrowsers(){
+    listEl.innerHTML = BROWSERS.map(b => {
+      const isSel = state.selected.has(b.id);
+      const isExp = state.expanded.has(b.id);
+      const badge = b.status === 'active'
+        ? '<span class="badge active">Active</span>'
+        : '<span class="badge detected">Detected</span>';
+      return `
+      <div class="browser-row ${isSel?'selected':''} ${isExp?'expanded':''}" data-id="${b.id}">
+        <div class="browser-main">
+          <button class="check-toggle" data-action="select" data-id="${b.id}" aria-label="select">${icon('check')}</button>
+          <div class="browser-icon">${icon(b.id)}</div>
+          <div class="browser-id" data-action="expand" data-id="${b.id}">
+            <div class="browser-id-top">
+              <span class="browser-name">${b.name}</span>
+              <span class="badge engine">${b.engine}</span>
+              ${badge}
+            </div>
+            <div class="browser-meta">
+              <span>${b.version}</span><span class="dot"></span>
+              <span>Last activity: ${b.last}</span>
+            </div>
+          </div>
+          <div class="browser-data-found">Data found<br><b>${b.found}</b></div>
+          <button class="expand-btn" data-action="expand" data-id="${b.id}">${icon('chevron')}</button>
+        </div>
+        <div class="actions-wrap"><div class="actions-inner">
+          <div class="actions-grid">
+            ${Object.keys(OPS).map(opKey => renderActionCard(b, opKey)).join('')}
+          </div>
+        </div></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderActionCard(b, opKey){
+    const op = OPS[opKey];
+    const on = state.ops[b.id][opKey];
+    return `
+      <div class="action-card ${op.cls} ${on?'on':''}" data-op="${opKey}" data-id="${b.id}">
+        <div class="action-top">
+          <div class="action-id">
+            <div class="action-icon">${icon(op.icon)}</div>
+            <span class="action-name">${op.label}</span>
+          </div>
+          <button class="switch ${on?'on':''}" data-action="toggle-op" data-id="${b.id}" data-op="${opKey}" aria-label="toggle"></button>
+        </div>
+        <div class="action-desc">${op.desc}</div>
+        <button class="details-link" data-action="details" data-id="${b.id}" data-op="${opKey}">Details ${icon('arrow')}</button>
+      </div>`;
+  }
+
+  /* ---------------- INTERACTIONS: list ---------------- */
+  listEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    const { action, id, op } = btn.dataset;
+
+    if(action === 'select'){
+      toggleSelect(id);
+    } else if(action === 'expand'){
+      toggleExpand(id);
+    } else if(action === 'toggle-op'){
+      toggleOp(id, op);
+    } else if(action === 'details'){
+      openDrawer(id, op);
+    }
+  });
+
+  function toggleSelect(id){
+    if(state.selected.has(id)) state.selected.delete(id);
+    else state.selected.add(id);
+    renderBrowsers();
+    updateBar();
+  }
+
+  function toggleExpand(id){
+    if(state.expanded.has(id)) state.expanded.delete(id);
+    else state.expanded.add(id);
+    renderBrowsers();
+  }
+
+  function toggleOp(id, opKey){
+    state.ops[id][opKey] = !state.ops[id][opKey];
+    if(state.ops[id][opKey]) state.selected.add(id);
+    renderBrowsers();
+    updateBar();
+    const b = BROWSERS.find(x=>x.id===id);
+    toast('info', `${OPS[opKey].label} queued`, `${b.name} · ${OPS[opKey].label.toLowerCase()} operation added`);
+  }
+
+  function updateBar(){
+    const n = state.selected.size;
+    let ops = 0;
+    Object.values(state.ops).forEach(o => { ops += Object.values(o).filter(Boolean).length; });
+    $('#abCount').textContent = `${n} browser${n===1?'':'s'} selected`;
+    $('#abQueue').textContent = `${ops} operation${ops===1?'':'s'} queued`;
+    $('#selectionHint').textContent = n ? `${n} selected · ${ops} operations queued` : 'Select browsers to queue operations';
+    $('#actionBar').classList.toggle('show', n > 0);
+  }
+
+  $('#btnClearSelection').addEventListener('click', () => {
+    state.selected.clear();
+    BROWSERS.forEach(b => state.ops[b.id] = { clean:false, backup:false, bookmarks:false, passwords:false });
+    renderBrowsers(); updateBar();
+    toast('info','Selection cleared','All queued operations were removed');
+  });
+
+  $('#btnCleanSelected').addEventListener('click', () => runBulk('clean'));
+  $('#btnBackupSelected').addEventListener('click', () => runBulk('backup'));
+
+  function runBulk(kind){
+    const ids = Array.from(state.selected);
+    if(!ids.length) return;
+    toast('info', kind==='clean' ? 'Cleaning started' : 'Backup started', `${ids.length} browser${ids.length===1?'':'s'} in progress…`);
+    setTimeout(() => {
+      ids.forEach(id => {
+        const b = BROWSERS.find(x=>x.id===id);
+        addActivity(kind==='clean' ? 'Cookies cleaned' : 'Backup created', b.name, kind==='clean' ? `${(Math.random()*180+40|0)} MB freed` : `${(Math.random()*400+120|0)} MB`, kind==='clean'?'amber':'accent');
+      });
+      toast('ok', kind==='clean' ? 'Cleaning complete' : 'Backup complete', `${ids.length} browser${ids.length===1?'':'s'} processed successfully`);
+    }, 1400);
+  }
+
+  /* ---------------- DRAWER ---------------- */
+  const overlay = $('#overlay');
+  const drawer = $('#drawer');
+  const drawerIcon = $('#drawerIcon');
+  const drawerTitle = $('#drawerTitle');
+  const drawerSub = $('#drawerSub');
+  const drawerBody = $('#drawerBody');
+  const drawerFoot = $('#drawerFoot');
+
+  function closeDrawer(){
+    drawer.classList.remove('show');
+    overlay.classList.remove('show');
+    drawer.classList.remove('danger','green');
+  }
+  $('#drawerClose').addEventListener('click', closeDrawer);
+  overlay.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeDrawer(); });
+
+  function openDrawer(id, opKey){
+    const b = BROWSERS.find(x=>x.id===id);
+    drawer.classList.remove('danger','green');
+
+    if(opKey === 'clean') return renderCleanDrawer(b);
+    if(opKey === 'backup') return renderBackupDrawer(b);
+    if(opKey === 'bookmarks') return renderBookmarksDrawer(b);
+    if(opKey === 'passwords') return renderPasswordDrawer(b);
+  }
+
+  function show(){
+    overlay.classList.add('show');
+    drawer.classList.add('show');
+  }
+
+  function gbEstimate(options, checkedSet){
+    let total = 0;
+    options.forEach(o => { if(checkedSet.has(o.key)) total += parseFloat(o.size); });
+    return total;
+  }
+
+  /* ---- CLEAN DRAWER ---- */
+  function renderCleanDrawer(b){
+    drawer.classList.add('danger');
+    drawerIcon.className = 'drawer-icon danger';
+    drawerIcon.innerHTML = icon('clean');
+    drawerTitle.textContent = 'Clean browser data';
+    drawerSub.textContent = b.name;
+
+    const checked = new Set(CLEAN_OPTIONS.filter(o=>o.checked).map(o=>o.key));
+
+    function paint(){
+      drawerBody.innerHTML = `
+        <div class="drawer-note">${icon('info')}<span>Selected data will be permanently removed from this browser. This action cannot be undone.</span></div>
+        <div class="field-block">
+          <div class="field-label">Select data to remove</div>
+          <div id="optList">
+            ${CLEAN_OPTIONS.map(o => optionRow(o, checked)).join('')}
+          </div>
+        </div>
+        <div class="estimate-box">
+          <div><div class="el">Estimated cleanup</div><div class="ev" id="estVal">${gbEstimate(CLEAN_OPTIONS, checked).toFixed(2)} GB</div></div>
+          <div class="stat-icon" style="background:var(--red-dim);color:#ff8a94;">${icon('clean')}</div>
+        </div>
+      `;
+      bindOptions(CLEAN_OPTIONS, checked, () => {
+        $('#estVal').textContent = gbEstimate(CLEAN_OPTIONS, checked).toFixed(2) + ' GB';
+      });
+    }
+    paint();
+
+    drawerFoot.innerHTML = `
+      <button class="btn btn-ghost" id="dCancel">Cancel</button>
+      <button class="btn btn-danger" id="dApply">Apply selection</button>
+    `;
+    $('#dCancel').addEventListener('click', closeDrawer);
+    $('#dApply').addEventListener('click', () => {
+      simulateProgress('dApply', 'Cleaning…', () => {
+        state.ops[b.id].clean = true;
+        renderBrowsers(); updateBar();
+        addActivity('Cookies cleaned', b.name, `${gbEstimate(CLEAN_OPTIONS, checked).toFixed(2)} GB freed`, 'amber');
+        toast('ok','Cleanup applied', `${b.name} · ${checked.size} data types selected`);
+        closeDrawer();
+      });
+    });
+    show();
+  }
+
+  /* ---- BACKUP DRAWER ---- */
+  function renderBackupDrawer(b){
+    drawerIcon.className = 'drawer-icon';
+    drawerIcon.innerHTML = icon('backup');
+    drawerTitle.textContent = 'Browser Profile Backup';
+    drawerSub.textContent = b.name;
+
+    const checked = new Set(BACKUP_OPTIONS.filter(o=>o.checked).map(o=>o.key));
+
+    function mbEstimate(){
+      let total = 0;
+      BACKUP_OPTIONS.forEach(o => { if(checked.has(o.key)) total += parseFloat(o.size); });
+      return total;
+    }
+
+    function paint(){
+      drawerBody.innerHTML = `
+        <div class="field-block">
+          <div class="field-label">Select what to include</div>
+          <div id="optList">
+            ${BACKUP_OPTIONS.map(o => optionRow(o, checked)).join('')}
+          </div>
+        </div>
+        <div class="field-block">
+          <div class="field-label">Destination</div>
+          <div class="field-value-box">~/BrowserVault/Backups/${b.name.replace(/\s+/g,'')}/</div>
+        </div>
+        <div class="estimate-box">
+          <div><div class="el">Estimated size</div><div class="ev" id="estVal">${mbEstimate()} MB</div></div>
+          <div class="stat-icon">${icon('backup')}</div>
+        </div>
+      `;
+      bindOptions(BACKUP_OPTIONS, checked, () => { $('#estVal').textContent = mbEstimate() + ' MB'; });
+    }
+    paint();
+
+    drawerFoot.innerHTML = `
+      <button class="btn btn-ghost" id="dCancel">Cancel</button>
+      <button class="btn btn-primary" id="dApply">Create Backup</button>
+    `;
+    $('#dCancel').addEventListener('click', closeDrawer);
+    $('#dApply').addEventListener('click', () => {
+      simulateProgress('dApply', 'Creating backup…', () => {
+        state.ops[b.id].backup = true;
+        renderBrowsers(); updateBar();
+        addActivity('Backup created', b.name, `${mbEstimate()} MB`, 'accent');
+        toast('ok','Backup created', `${b.name} · saved to BrowserVault/Backups/`);
+        closeDrawer();
+      });
+    });
+    show();
+  }
+
+  /* ---- BOOKMARKS DRAWER ---- */
+  function renderBookmarksDrawer(b){
+    drawer.classList.add('green');
+    drawerIcon.className = 'drawer-icon green';
+    drawerIcon.innerHTML = icon('bookmarks');
+    drawerTitle.textContent = 'Bookmarks Export';
+    drawerSub.textContent = b.name;
+
+    drawerBody.innerHTML = `
+      <div class="drawer-note safe">${icon('shield')}<span>Bookmarks will be exported as a portable HTML file compatible with every major browser.</span></div>
+      <div class="field-block">
+        <div class="field-label">Export format</div>
+        <div class="format-options">
+          <div class="format-opt active" data-fmt="html">HTML</div>
+          <div class="format-opt" data-fmt="json">JSON</div>
+          <div class="format-opt" data-fmt="csv">CSV</div>
+        </div>
+      </div>
+      <div class="field-block">
+        <div class="field-label">Destination</div>
+        <div class="field-value-box">~/BrowserVault/Bookmarks/${b.name.replace(/\s+/g,'')}.html</div>
+      </div>
+      <div class="estimate-box">
+        <div><div class="el">Bookmarks found</div><div class="ev">${(Math.random()*400+80|0)}</div></div>
+        <div class="stat-icon" style="background:var(--green-dim);color:var(--green);">${icon('bookmarks')}</div>
+      </div>
+    `;
+    $$('.format-opt', drawerBody).forEach(el => el.addEventListener('click', () => {
+      $$('.format-opt', drawerBody).forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+    }));
+
+    drawerFoot.innerHTML = `
+      <button class="btn btn-ghost" id="dCancel">Cancel</button>
+      <button class="btn btn-primary" id="dApply">Export Bookmarks</button>
+    `;
+    $('#dCancel').addEventListener('click', closeDrawer);
+    $('#dApply').addEventListener('click', () => {
+      simulateProgress('dApply', 'Exporting…', () => {
+        state.ops[b.id].bookmarks = true;
+        renderBrowsers(); updateBar();
+        addActivity('Bookmarks exported', b.name, 'Saved to Bookmarks/', 'green');
+        toast('ok','Bookmarks exported', `${b.name} · export ready`);
+        closeDrawer();
+      });
+    });
+    show();
+  }
+
+  /* ---- PASSWORDS DRAWER ---- */
+  function renderPasswordDrawer(b){
+    drawer.classList.add('green');
+    drawerIcon.className = 'drawer-icon green';
+    drawerIcon.innerHTML = icon('passwords');
+    drawerTitle.textContent = 'Password Export';
+    drawerSub.textContent = b.name;
+
+    let requireConfirm = true;
+    let fmt = 'vault';
+
+    function paint(){
+      drawerBody.innerHTML = `
+        <div class="drawer-note safe">${icon('lock')}<span>Password data is sensitive and will be encrypted before export.</span></div>
+        <div class="field-block">
+          <div class="field-label">Export format</div>
+          <div class="format-options">
+            <div class="format-opt" data-fmt="json">JSON</div>
+            <div class="format-opt" data-fmt="csv">CSV</div>
+            <div class="format-opt ${fmt==='vault'?'active':''}" data-fmt="vault">Encrypted Vault</div>
+          </div>
+        </div>
+        <div class="field-block">
+          <div class="field-label">Encryption</div>
+          <div class="field-value-box">AES-256</div>
+        </div>
+        <div class="toggle-line">
+          <span class="tl-label">Require confirmation before export</span>
+          <button class="switch ${requireConfirm?'on':''}" id="confirmSwitch" style="background:${requireConfirm?'var(--green)':''}"></button>
+        </div>
+      `;
+      $$('.format-opt', drawerBody).forEach(el => {
+        if(el.dataset.fmt === fmt) el.classList.add('active');
+        el.addEventListener('click', () => { fmt = el.dataset.fmt; paint(); });
+      });
+      $('#confirmSwitch').addEventListener('click', () => { requireConfirm = !requireConfirm; paint(); });
+    }
+    paint();
+
+    drawerFoot.innerHTML = `
+      <button class="btn btn-ghost" id="dCancel">Cancel</button>
+      <button class="btn btn-primary" id="dApply">Export Securely</button>
+    `;
+    $('#dCancel').addEventListener('click', closeDrawer);
+    $('#dApply').addEventListener('click', () => {
+      if(requireConfirm && !confirm(`Export encrypted password vault for ${b.name}?`)) return;
+      simulateProgress('dApply', 'Encrypting & exporting…', () => {
+        state.ops[b.id].passwords = true;
+        renderBrowsers(); updateBar();
+        addActivity('Passwords exported', b.name, 'AES-256 encrypted vault', 'green');
+        toast('ok','Export complete', `${b.name} · encrypted vault created`);
+        closeDrawer();
+      });
+    });
+    show();
+  }
+
+  /* ---- shared option row helpers ---- */
+  function optionRow(o, checkedSet){
+    const isOn = checkedSet.has(o.key);
+    return `
+      <div class="option-row ${isOn?'checked':''}" data-key="${o.key}">
+        <div class="opt-check">${icon('check')}</div>
+        <div class="opt-text">
+          <div class="opt-name">${o.name}</div>
+          <div class="opt-desc">${o.desc}</div>
+        </div>
+        <div class="opt-size">${o.size}</div>
+      </div>`;
+  }
+  function bindOptions(options, checkedSet, onChange){
+    $$('.option-row', drawerBody).forEach(row => {
+      row.addEventListener('click', () => {
+        const key = row.dataset.key;
+        if(checkedSet.has(key)) checkedSet.delete(key); else checkedSet.add(key);
+        row.classList.toggle('checked');
+        onChange();
+      });
+    });
+  }
+
+  function simulateProgress(btnId, label, done){
+    const btn = document.getElementById(btnId);
+    if(!btn) return done();
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label;
+    let track = drawerFoot.querySelector('.progress-track');
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = original;
+      done();
+    }, 900);
+  }
+
+  /* ---------------- DOMAIN CLEANUP ---------------- */
+  const domainInput = $('#domainInput');
+  const scanState = $('#scanState');
+  const domainResults = $('#domainResults');
+  const domainTotal = $('#domainTotal');
+
+  $('#btnAnalyze').addEventListener('click', analyzeDomain);
+  domainInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') analyzeDomain(); });
+
+  function analyzeDomain(){
+    const raw = domainInput.value.trim();
+    if(!raw){ toast('warn','Enter a domain','Type a website domain to analyze'); return; }
+    const domain = raw.replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+
+    domainResults.style.display = 'none';
+    domainTotal.style.display = 'none';
+    scanState.style.display = 'flex';
+
+    setTimeout(() => {
+      scanState.style.display = 'none';
+      const sample = BROWSERS.filter(b => b.status === 'active').slice(0, 3 + Math.floor(Math.random()*2));
+      let totalMb = 0;
+      const rows = sample.map(b => {
+        const cookies = 3 + Math.floor(Math.random()*18);
+        const storage = (Math.random()*4 + 0.3);
+        const hist = Math.floor(Math.random()*40);
+        totalMb += storage;
+        return `<div class="domain-result-row">
+          <div class="drr-name"><span class="drr-icon">${icon(b.id)}</span>${b.name}</div>
+          <div class="drr-meta">Cookies · ${cookies} &nbsp;·&nbsp; ${storage.toFixed(1)} MB${hist?` &nbsp;·&nbsp; History · ${hist}`:''}</div>
+        </div>`;
+      }).join('');
+      domainResults.innerHTML = rows;
+      domainResults.style.display = 'flex';
+      $('#domainTotalValue').textContent = totalMb.toFixed(1) + ' MB';
+      domainTotal.style.display = 'flex';
+      toast('ok', 'Analysis complete', `${domain} · found data in ${sample.length} browsers`);
+
+      $('#btnRemoveDomain').onclick = () => {
+        toast('info','Removing domain data', `Cleaning ${domain} across ${sample.length} browsers…`);
+        setTimeout(() => {
+          addActivity('Domain data removed', domain, `${totalMb.toFixed(1)} MB freed`, 'amber');
+          toast('ok','Domain data removed', `${domain} · ${totalMb.toFixed(1)} MB freed`);
+          domainResults.style.display = 'none';
+          domainTotal.style.display = 'none';
+          domainInput.value = '';
+        }, 1000);
+      };
+    }, 1100);
+  }
+
+  /* ---------------- ACTIVITY LOG ---------------- */
+  const activityList = $('#activityList');
+  let activityData = [
+    { time:'05:42', title:'Backup created', sub:'Chrome · 486 MB', color:'accent' },
+    { time:'05:38', title:'Cookies cleaned', sub:'Firefox · 124 MB freed', color:'amber' },
+    { time:'05:21', title:'Profile scanned', sub:'Brave · No issues found', color:'green' },
+  ];
+
+  function renderActivity(){
+    activityList.innerHTML = activityData.map((a,i) => `
+      <div class="activity-item">
+        <div class="activity-time">${a.time}</div>
+        <div class="activity-dot-col">
+          <div class="activity-dot ${a.color==='amber'?'amber':a.color==='green'?'green':''}"></div>
+          ${i < activityData.length-1 ? '<div class="activity-line"></div>' : ''}
+        </div>
+        <div class="activity-body">
+          <div class="activity-title">${a.title}</div>
+          <div class="activity-sub">${a.sub}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  renderActivity();
+
+  function addActivity(title, source, meta, color){
+    const now = new Date();
+    const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    activityData.unshift({ time, title, sub:`${source} · ${meta}`, color });
+    activityData = activityData.slice(0, 8);
+    renderActivity();
+  }
+
+  /* ---------------- TOASTS ---------------- */
+  const toastStack = $('#toastStack');
+  function toast(kind, title, sub){
+    const el = document.createElement('div');
+    el.className = `toast ${kind==='ok'?'':kind}`;
+    el.innerHTML = `<div class="toast-icon">${icon('toastOk')}</div><div class="toast-text"><div class="tt-title">${title}</div><div class="tt-sub">${sub}</div></div>`;
+    toastStack.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 220);
+    }, 3400);
+  }
+
+  $('#btnSettings').addEventListener('click', () => toast('info','Settings','Configuration panel is not part of this preview'));
+
+  /* ---------------- INIT ---------------- */
+  renderBrowsers();
+  updateBar();
+
+  // subtle "last scan" ticking text
+  let secs = 0;
+  setInterval(() => {
+    secs += 15;
+    const el = $('#scanFreshness');
+    if(secs < 60) el.textContent = `Scanned ${secs}s ago`;
+    else el.textContent = `Scanned ${Math.floor(secs/60)}m ago`;
+  }, 15000);
+
+})();
+</script>
+</body>
+</html>
