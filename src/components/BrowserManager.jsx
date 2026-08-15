@@ -111,6 +111,7 @@ export default function BrowserManager({ onNotify }) {
   useEffect(() => () => {
     clearInterval(deletePollRef.current)
     clearInterval(resetPollRef.current)
+    clearInterval(backupPollRef.current)
   }, [])
 
   const isRowFullyChecked = (browserId, group, keys) => keys.every((k) => selection[browserId][group][k])
@@ -202,49 +203,56 @@ export default function BrowserManager({ onNotify }) {
     }
   }
 
+  const stepLabel = (browserName, kind) =>
+    `${browserName}: ${t(kind === 'profile' ? 'browserBackup.backupProfile' : kind === 'bookmarks' ? 'browserBackup.backupBookmarks' : 'browserBackup.exportPasswords')}`
+
+  // Job en el servidor por el mismo motivo que borrado/reset: backupBrowserProfile cierra
+  // el navegador, y si es el que aloja este panel, una cola secuencial hecha acá se corta
+  // ahí mismo.
   const handleProcessBackup = async () => {
+    const items = BROWSERS.map((browser) => ({ browserId: browser.id, ...selection[browser.id].backup })).filter(
+      (item) => item.profile || item.bookmarks || item.passwords
+    )
+    if (items.length === 0) return
+
     setProcessingBackup(true)
     setBackupResults(null)
-    const steps = []
-    try {
-      for (const browser of BROWSERS) {
-        const row = selection[browser.id].backup
-        if (!Object.values(row).some(Boolean)) continue
+    setSelection((prev) => {
+      const next = { ...prev }
+      for (const b of BROWSERS) next[b.id] = { ...next[b.id], backup: emptyGroup(BACKUP_TYPES) }
+      return next
+    })
 
-        if (row.profile) {
-          try {
-            const { result } = await backupBrowserProfile(browser.id)
-            steps.push({ id: `${browser.id}-profile`, label: `${browser.name}: ${t('browserBackup.backupProfile')}`, status: 'success', sizeBytes: result.sizeBytes })
-          } catch (err) {
-            steps.push({ id: `${browser.id}-profile`, label: `${browser.name}: ${t('browserBackup.backupProfile')}`, status: 'error', error: err.message })
+    try {
+      const jobId = await startBackupSelected(items)
+      backupPollRef.current = setInterval(async () => {
+        try {
+          const status = await getBackupSelectedStatus(jobId)
+          if (status.status !== 'running') {
+            clearInterval(backupPollRef.current)
+            setProcessingBackup(false)
+            const browserNames = Object.fromEntries(BROWSERS.map((b) => [b.id, b.name]))
+            setBackupResults(
+              status.steps.map((step) => ({
+                id: step.id,
+                label: stepLabel(browserNames[step.browserId] || step.browserId, step.kind),
+                status: step.status,
+                sizeBytes: step.sizeBytes,
+                error: step.error,
+              }))
+            )
+            if (status.status === 'done') onNotify(t('browserBackup.completed'))
+            else if (status.status === 'error') onNotify(status.error)
           }
+        } catch (err) {
+          clearInterval(backupPollRef.current)
+          setProcessingBackup(false)
+          onNotify(err.message)
         }
-        if (row.bookmarks) {
-          try {
-            await backupBrowserBookmarks(browser.id)
-            steps.push({ id: `${browser.id}-bookmarks`, label: `${browser.name}: ${t('browserBackup.backupBookmarks')}`, status: 'success' })
-          } catch (err) {
-            steps.push({ id: `${browser.id}-bookmarks`, label: `${browser.name}: ${t('browserBackup.backupBookmarks')}`, status: 'error', error: err.message })
-          }
-        }
-        if (row.passwords) {
-          try {
-            await openPasswordManager(browser.id)
-            steps.push({ id: `${browser.id}-passwords`, label: `${browser.name}: ${t('browserBackup.exportPasswords')}`, status: 'success' })
-          } catch (err) {
-            steps.push({ id: `${browser.id}-passwords`, label: `${browser.name}: ${t('browserBackup.exportPasswords')}`, status: 'error', error: err.message })
-          }
-        }
-      }
-      setBackupResults(steps)
-      onNotify(t('browserBackup.completed'))
-    } finally {
+      }, 1500)
+    } catch (err) {
       setProcessingBackup(false)
-      setSelection((prev) => {
-        const next = { ...prev }
-        for (const b of BROWSERS) next[b.id] = { ...next[b.id], backup: emptyGroup(BACKUP_TYPES) }
-        return next
-      })
+      onNotify(err.message)
     }
   }
 
