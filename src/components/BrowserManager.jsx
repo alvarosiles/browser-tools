@@ -151,8 +151,10 @@ export default function BrowserManager({ onNotify }) {
         const types = DELETE_TYPES.filter((key) => selection[browser.id].del[key])
         if (types.length === 0) continue
         try {
-          await clearBrowserData(browser.id, types)
-          onNotify(t('browserCleaner.clearedNotify', { name: browser.name }))
+          const result = await clearBrowserData(browser.id, types)
+          if (!result.skipped) {
+            onNotify(t('browserCleaner.clearedNotify', { name: browser.name }))
+          }
         } catch (err) {
           onNotify(`${browser.name}: ${err.message}`)
         }

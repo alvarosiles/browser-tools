@@ -194,7 +194,7 @@ async function disableChromiumSync(profileDirs) {
 
 // LibreWolf y Zen son forks de Firefox (motor Gecko) que reutilizan el mismo formato de
 // perfil (places.sqlite, cookies.sqlite, storage/default/...), pero cada uno con su propia
-// carpeta base en vez de "Mozilla/Firefox" — de ahí que GECKO_PROFILES_DIRS separe por
+// carpeta base en vez de "Mozilla/Firefox" — de ahí que GECKO_PROFILE_CANDIDATES separe por
 // browserId en lugar de asumir siempre la ruta de Firefox.
 // Firefox en Linux puede venir empaquetado como binario nativo, snap (default en Ubuntu
 // 22.04+) o flatpak, y cada uno guarda el perfil en una carpeta base distinta. Se prueban
@@ -282,8 +282,7 @@ const FIREFOX_LOCAL_TYPE_SUBDIRS = {
 }
 
 async function findFirefoxTypeDirs(browserId, types) {
-  const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
-  const localProfilesDir = GECKO_PROFILES_DIRS[browserId].local
+  const { roaming: roamingProfilesDir, local: localProfilesDir } = await resolveGeckoDirs(browserId)
   const profileNames = await findFirefoxProfileNames(browserId)
 
   const roaming = profileNames.flatMap((name) =>
@@ -418,6 +417,14 @@ export async function clearBrowserData(browserId, types) {
   const validTypes = (types || []).filter((t) => BROWSER_DATA_TYPES.includes(t))
   if (validTypes.length === 0) throw new Error('Debe seleccionar al menos un tipo de dato a borrar')
 
+  // Si el navegador no está instalado en esta PC, no es un error real — la UI permite
+  // marcar los 10 navegadores de una sola vez sin importar cuáles existen acá, así que
+  // se salta en silencio en vez de fallar (evita un aviso de "error" por cada navegador
+  // que el usuario nunca instaló).
+  if (!(await isBrowserInstalled(browserId))) {
+    return { browserId, types: validTypes, skipped: true }
+  }
+
   await closeBrowser(browserId)
 
   const cleared = {}
@@ -451,7 +458,7 @@ export async function clearBrowserData(browserId, types) {
       }
     } else {
       const profileNames = await findFirefoxProfileNames(browserId)
-      const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+      const { roaming: roamingProfilesDir } = await resolveGeckoDirs(browserId)
       for (const name of profileNames) {
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore-backups'), { recursive: true })
         await rmWithRetry(path.join(roamingProfilesDir, name, 'sessionstore.jsonlz4'))
@@ -595,7 +602,7 @@ async function clearChromiumDomainData(browserId, domain) {
 }
 
 async function clearFirefoxDomainData(browserId, domain) {
-  const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+  const { roaming: roamingProfilesDir } = await resolveGeckoDirs(browserId)
   const profileNames = await findFirefoxProfileNames(browserId)
   const like = `%${domain}%`
   let cookiesDeleted = 0
@@ -900,7 +907,7 @@ export async function backupBrowserProfile(browserId) {
   await fs.mkdir(destDir, { recursive: true })
 
   if (GECKO_BROWSER_IDS.has(browserId)) {
-    const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+    const { roaming: roamingProfilesDir } = await resolveGeckoDirs(browserId)
     const profileNames = await findFirefoxProfileNames(browserId)
     for (const name of profileNames) {
       await runRobocopy(path.join(roamingProfilesDir, name), path.join(destDir, name), [
@@ -937,7 +944,7 @@ export async function backupBrowserBookmarks(browserId) {
   const savedFiles = []
 
   if (GECKO_BROWSER_IDS.has(browserId)) {
-    const roamingProfilesDir = GECKO_PROFILES_DIRS[browserId].roaming
+    const { roaming: roamingProfilesDir } = await resolveGeckoDirs(browserId)
     const profileNames = await findFirefoxProfileNames(browserId)
     for (const name of profileNames) {
       const src = await existingPath(path.join(roamingProfilesDir, name, 'places.sqlite'))
