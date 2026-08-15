@@ -77,7 +77,7 @@ setup_app_dir() {
 
   # Instalar dependencias
   log_info "Instalando dependencias (esto puede tardar un minuto)..."
-  export NODE_PATH="${NODE_HOME}/bin:${NODE_HOME}/lib/node_modules"
+  export PATH="${NODE_HOME}/bin:${PATH}"
   "${NODE_HOME}/bin/npm" install --prefix "${INSTALL_DIR}/app" --production
 }
 
