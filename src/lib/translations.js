@@ -6,7 +6,7 @@ export const translations = {
   es: {
     header: {
       title: 'IT Support Tools',
-      subtitle: 'Panel de mantenimiento para Windows y Linux',
+      subtitle: 'Panel de mantenimiento  alvaro para Windows y Linux',
     },
     footer: {
       text: 'IT Support Tools - Panel de Mantenimiento para Windows y Linux',
