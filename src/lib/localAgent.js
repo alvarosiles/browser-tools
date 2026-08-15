@@ -47,6 +47,42 @@ export function resetBrowserProfile(browserId) {
   return requestLocalAction('reset-browser-profile', { browserId })
 }
 
+// Corren como job en el servidor (ver server.js) para que la cola no se corte si el
+// navegador que aloja este panel es uno de los que se están cerrando/borrando.
+export async function startClearBrowsersData(items) {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/clear-browsers-data`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo iniciar el borrado.')
+  return data.jobId
+}
+
+export function getClearBrowsersDataStatus(jobId) {
+  return requestLocalGet(`clear-browsers-data-status/${jobId}`)
+}
+
+export async function startResetBrowserProfiles(browserIds) {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/reset-browser-profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ browserIds }),
+  }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo iniciar el reset.')
+  return data.jobId
+}
+
+export function getResetBrowserProfilesStatus(jobId) {
+  return requestLocalGet(`reset-browser-profiles-status/${jobId}`)
+}
+
 export function openControlPanel() {
   return requestLocalAction('open-control-panel')
 }

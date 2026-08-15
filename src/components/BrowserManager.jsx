@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   History,
   Save,
@@ -26,13 +26,15 @@ import {
 import Card from './Card'
 import {
   getInstalledBrowsers,
-  clearBrowserData,
   backupBrowserProfile,
   backupBrowserBookmarks,
   openPasswordManager,
   openBackupFolder,
   clearDomainData,
-  resetBrowserProfile,
+  startClearBrowsersData,
+  getClearBrowsersDataStatus,
+  startResetBrowserProfiles,
+  getResetBrowserProfilesStatus,
 } from '../lib/localAgent'
 import { useLanguage } from '../lib/i18n'
 
@@ -87,6 +89,8 @@ export default function BrowserManager({ onNotify }) {
   const [processingDomain, setProcessingDomain] = useState(false)
   const [resetSelection, setResetSelection] = useState(() => Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
   const [processingReset, setProcessingReset] = useState(false)
+  const deletePollRef = useRef(null)
+  const resetPollRef = useRef(null)
 
   useEffect(() => {
     getInstalledBrowsers()
@@ -102,6 +106,11 @@ export default function BrowserManager({ onNotify }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  useEffect(() => () => {
+    clearInterval(deletePollRef.current)
+    clearInterval(resetPollRef.current)
   }, [])
 
   const isRowFullyChecked = (browserId, group, keys) => keys.every((k) => selection[browserId][group][k])
@@ -149,28 +158,47 @@ export default function BrowserManager({ onNotify }) {
     })
   }
 
+  // Corre como job en el servidor (ver local-agent/server.js): si el navegador que
+  // cerramos es el mismo que aloja este panel, la pestaña muere a mitad de la cola si
+  // esto se hiciera con un for/await acá — el servidor sigue procesando el resto
+  // independientemente de que el cliente que lo pidió siga vivo o no.
   const handleProcessDelete = async () => {
+    const items = BROWSERS.map((browser) => ({
+      browserId: browser.id,
+      types: DELETE_TYPES.filter((key) => selection[browser.id].del[key]),
+    })).filter((item) => item.types.length > 0)
+    if (items.length === 0) return
+
     setProcessingDelete(true)
+    setSelection((prev) => {
+      const next = { ...prev }
+      for (const b of BROWSERS) next[b.id] = { ...next[b.id], del: emptyGroup(DELETE_TYPES) }
+      return next
+    })
+
     try {
-      for (const browser of BROWSERS) {
-        const types = DELETE_TYPES.filter((key) => selection[browser.id].del[key])
-        if (types.length === 0) continue
+      const jobId = await startClearBrowsersData(items)
+      deletePollRef.current = setInterval(async () => {
         try {
-          const result = await clearBrowserData(browser.id, types)
-          if (!result.skipped) {
-            onNotify(t('browserCleaner.clearedNotify', { name: browser.name }))
+          const status = await getClearBrowsersDataStatus(jobId)
+          if (status.status !== 'running') {
+            clearInterval(deletePollRef.current)
+            setProcessingDelete(false)
+            for (const step of status.steps) {
+              if (step.status === 'success') onNotify(t('browserCleaner.clearedNotify', { name: step.label }))
+              else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
+            }
+            if (status.status === 'error') onNotify(status.error)
           }
         } catch (err) {
-          onNotify(`${browser.name}: ${err.message}`)
+          clearInterval(deletePollRef.current)
+          setProcessingDelete(false)
+          onNotify(err.message)
         }
-      }
-    } finally {
+      }, 1500)
+    } catch (err) {
       setProcessingDelete(false)
-      setSelection((prev) => {
-        const next = { ...prev }
-        for (const b of BROWSERS) next[b.id] = { ...next[b.id], del: emptyGroup(DELETE_TYPES) }
-        return next
-      })
+      onNotify(err.message)
     }
   }
 
@@ -264,20 +292,31 @@ export default function BrowserManager({ onNotify }) {
     }
 
     setProcessingReset(true)
+    setResetSelection(Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
+
     try {
-      for (const browser of targets) {
+      const jobId = await startResetBrowserProfiles(targets.map((b) => b.id))
+      resetPollRef.current = setInterval(async () => {
         try {
-          const result = await resetBrowserProfile(browser.id)
-          if (!result.skipped) {
-            onNotify(t('browserReset.doneNotify', { name: browser.name }))
+          const status = await getResetBrowserProfilesStatus(jobId)
+          if (status.status !== 'running') {
+            clearInterval(resetPollRef.current)
+            setProcessingReset(false)
+            for (const step of status.steps) {
+              if (step.status === 'success') onNotify(t('browserReset.doneNotify', { name: step.label }))
+              else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
+            }
+            if (status.status === 'error') onNotify(status.error)
           }
         } catch (err) {
-          onNotify(`${browser.name}: ${err.message}`)
+          clearInterval(resetPollRef.current)
+          setProcessingReset(false)
+          onNotify(err.message)
         }
-      }
-    } finally {
+      }, 1500)
+    } catch (err) {
       setProcessingReset(false)
-      setResetSelection(Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
+      onNotify(err.message)
     }
   }
 

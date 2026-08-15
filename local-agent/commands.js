@@ -1144,6 +1144,53 @@ export async function backupAll(onProgress) {
   return { destRoot, results, finishedAt: new Date().toISOString() }
 }
 
+// Igual que backupAll: si el panel que dispara esto está abierto en uno de los
+// navegadores que se están cerrando/borrando, la pestaña muere a mitad de la cola y el
+// resto nunca se procesa — por eso esto corre como job en el servidor (server.js expone
+// un jobId consultable con polling) en vez de que el frontend vaya llamando navegador por
+// navegador desde su propio contexto, que se corta si el navegador anfitrión se cierra.
+export async function clearMultipleBrowsersData(items, onProgress) {
+  const results = []
+
+  for (const { browserId, types } of items) {
+    try {
+      const result = await clearBrowserData(browserId, types)
+      results.push({
+        browserId,
+        label: BROWSER_LABELS[browserId],
+        status: result.skipped ? 'skipped' : 'success',
+      })
+    } catch (err) {
+      results.push({ browserId, label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+    }
+    onProgress?.(results.slice())
+  }
+
+  return { results, finishedAt: new Date().toISOString() }
+}
+
+// Mismo motivo que clearMultipleBrowsersData: el reset de perfil también cierra el
+// navegador, y si es el que aloja el panel, corta la cola a mitad de camino.
+export async function resetMultipleBrowserProfiles(browserIds, onProgress) {
+  const results = []
+
+  for (const browserId of browserIds) {
+    try {
+      const result = await resetBrowserProfile(browserId)
+      results.push({
+        browserId,
+        label: BROWSER_LABELS[browserId],
+        status: result.skipped ? 'skipped' : 'success',
+      })
+    } catch (err) {
+      results.push({ browserId, label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+    }
+    onProgress?.(results.slice())
+  }
+
+  return { results, finishedAt: new Date().toISOString() }
+}
+
 export async function openBackupFolder(date) {
   const dir = path.join(BACKUP_ROOT, date || todayFolderName())
   await fs.mkdir(dir, { recursive: true })

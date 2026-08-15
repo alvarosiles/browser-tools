@@ -32,6 +32,8 @@ import {
   restartSpooler,
   getSystemInfo,
   resetBrowserProfile,
+  clearMultipleBrowsersData,
+  resetMultipleBrowserProfiles,
   openQuickFolder,
   runSfcScan,
   runDismRestoreHealth,
@@ -379,6 +381,74 @@ app.post('/backup-all', (_req, res) => {
     })
 
   res.json({ ok: true, jobId })
+})
+
+// "Procesar" borrado/reset puede cerrar el mismo navegador que aloja el panel — si eso
+// pasa a mitad de una cola secuencial hecha desde el frontend, la pestaña muere y el
+// resto de la cola nunca se procesa. Corriendo como job en el servidor (mismo patrón que
+// /backup-all), sigue completándose aunque el navegador que disparó el pedido se cierre.
+const clearJobs = new Map()
+
+app.post('/clear-browsers-data', (req, res) => {
+  const { items } = req.body
+  const jobId = crypto.randomUUID()
+  const job = { status: 'running', steps: [], error: null }
+  clearJobs.set(jobId, job)
+
+  clearMultipleBrowsersData(items, (steps) => {
+    job.steps = steps
+  })
+    .then(({ results }) => {
+      job.status = 'done'
+      job.steps = results
+    })
+    .catch((err) => {
+      job.status = 'error'
+      job.error = err.message
+    })
+
+  res.json({ ok: true, jobId })
+})
+
+app.get('/clear-browsers-data-status/:jobId', (req, res) => {
+  const job = clearJobs.get(req.params.jobId)
+  if (!job) {
+    res.status(404).json({ ok: false, error: 'Job no encontrado' })
+    return
+  }
+  res.json({ ok: true, ...job })
+})
+
+const resetJobs = new Map()
+
+app.post('/reset-browser-profiles', (req, res) => {
+  const { browserIds } = req.body
+  const jobId = crypto.randomUUID()
+  const job = { status: 'running', steps: [], error: null }
+  resetJobs.set(jobId, job)
+
+  resetMultipleBrowserProfiles(browserIds, (steps) => {
+    job.steps = steps
+  })
+    .then(({ results }) => {
+      job.status = 'done'
+      job.steps = results
+    })
+    .catch((err) => {
+      job.status = 'error'
+      job.error = err.message
+    })
+
+  res.json({ ok: true, jobId })
+})
+
+app.get('/reset-browser-profiles-status/:jobId', (req, res) => {
+  const job = resetJobs.get(req.params.jobId)
+  if (!job) {
+    res.status(404).json({ ok: false, error: 'Job no encontrado' })
+    return
+  }
+  res.json({ ok: true, ...job })
 })
 
 app.get('/backup-status/:jobId', (req, res) => {
