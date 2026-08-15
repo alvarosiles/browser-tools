@@ -16,7 +16,7 @@ import { IS_WINDOWS, IS_LINUX } from './commands.js'
 
 // Debe bumpearse junto con la versión en local-agent/package.json (scripts/build-agent-exe.js
 // valida que coincidan antes de publicar).
-export const AGENT_VERSION = '0.1.8'
+export const AGENT_VERSION = '0.1.9'
 
 const VERSION_URL = 'https://alvarosiles.github.io/browser-tools/downloads/version.json'
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
