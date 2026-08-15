@@ -45,6 +45,40 @@ const USER_DATA_DIRS = {
 
 const FLAT_PROFILE_BROWSERS = new Set()
 
+// En Ubuntu/snap, Chromium/Brave/Opera/Vivaldi suelen instalarse vía snap además de (o en
+// vez de) su paquete nativo. El confinamiento de snap redirige cada revisión a su propia
+// carpeta ("~/snap/<paquete>/<revisión>/.config/..."), y tras varias actualizaciones el
+// perfil real puede terminar repartido entre revisiones distintas en vez de consolidarse
+// en una sola — se comprobó en producción que Brave y Opera dejaban historial/cookies en
+// más de una carpeta de revisión a la vez. Por eso no alcanza con una única ruta candidata
+// (a diferencia de GECKO_PROFILE_CANDIDATES, que sólo necesita la primera con contenido):
+// acá hay que enumerar TODAS las revisiones instaladas y tratarlas todas como válidas.
+const CHROMIUM_SNAP_SUBPATH = {
+  chromium: { snapName: 'chromium', configSubpath: ['chromium'] },
+  brave: { snapName: 'brave', configSubpath: ['BraveSoftware', 'Brave-Browser'] },
+  opera: { snapName: 'opera', configSubpath: ['opera'] },
+  vivaldi: { snapName: 'vivaldi', configSubpath: ['vivaldi'] },
+}
+
+async function findChromiumUserDataDirs(browserId) {
+  const dirs = []
+  const nativeDir = USER_DATA_DIRS[browserId]
+  if (nativeDir && (await existingPath(nativeDir))) dirs.push(nativeDir)
+
+  if (IS_LINUX && CHROMIUM_SNAP_SUBPATH[browserId]) {
+    const { snapName, configSubpath } = CHROMIUM_SNAP_SUBPATH[browserId]
+    const snapRoot = path.join(os.homedir(), 'snap', snapName)
+    const revisions = await fs.readdir(snapRoot, { withFileTypes: true }).catch(() => [])
+    for (const rev of revisions) {
+      if (!rev.isDirectory()) continue
+      const dir = path.join(snapRoot, rev.name, '.config', ...configSubpath)
+      if (await existingPath(dir)) dirs.push(dir)
+    }
+  }
+
+  return [...new Set(dirs)]
+}
+
 // GNOME Web (Epiphany) es exclusivo de Linux y, a diferencia de Chromium, separa datos
 // (~/.local/share) de caché (~/.cache) siguiendo XDG, con un único perfil por defecto
 // (sin subcarpetas "Default"/"Profile N").
@@ -70,17 +104,24 @@ const PROCESS_NAME_CANDIDATES = {
 }
 
 // Carpetas de perfil reales de un navegador Chromium (o la carpeta base si es "plano" como Opera).
+// Recorre TODAS las carpetas "User Data" candidatas (nativa + cada revisión snap instalada),
+// no solo la primera que exista, porque el perfil real puede estar repartido entre varias.
 async function findChromiumProfileDirs(browserId) {
-  const userDataDir = USER_DATA_DIRS[browserId]
+  const userDataDirs = await findChromiumUserDataDirs(browserId)
 
   if (FLAT_PROFILE_BROWSERS.has(browserId)) {
-    return [userDataDir]
+    return userDataDirs
   }
 
-  const entries = await fs.readdir(userDataDir, { withFileTypes: true }).catch(() => [])
-  return entries
-    .filter((e) => e.isDirectory() && (e.name === 'Default' || e.name.startsWith('Profile ')))
-    .map((e) => path.join(userDataDir, e.name))
+  const perDir = await Promise.all(
+    userDataDirs.map(async (userDataDir) => {
+      const entries = await fs.readdir(userDataDir, { withFileTypes: true }).catch(() => [])
+      return entries
+        .filter((e) => e.isDirectory() && (e.name === 'Default' || e.name.startsWith('Profile ')))
+        .map((e) => path.join(userDataDir, e.name))
+    })
+  )
+  return perDir.flat()
 }
 
 async function existingPath(candidate) {
@@ -126,14 +167,14 @@ const CHROMIUM_SHARED_TYPE_SUBDIRS = {
 }
 
 async function findChromiumTypeDirs(browserId, types) {
-  const userDataDir = USER_DATA_DIRS[browserId]
+  const userDataDirs = await findChromiumUserDataDirs(browserId)
   const profileDirs = await findChromiumProfileDirs(browserId)
 
   const perProfile = profileDirs.flatMap((dir) =>
     types.flatMap((type) => (CHROMIUM_TYPE_SUBDIRS[type] || []).map((sub) => path.join(dir, sub)))
   )
-  const shared = types.flatMap((type) =>
-    (CHROMIUM_SHARED_TYPE_SUBDIRS[type] || []).map((sub) => path.join(userDataDir, sub))
+  const shared = userDataDirs.flatMap((userDataDir) =>
+    types.flatMap((type) => (CHROMIUM_SHARED_TYPE_SUBDIRS[type] || []).map((sub) => path.join(userDataDir, sub)))
   )
 
   const candidates = [...new Set([...perProfile, ...shared])]
@@ -537,6 +578,65 @@ function deleteRowsLikeDomain(dbPath, statements) {
   }
 }
 
+// "Preferences" no es el único JSON de Chromium que puede guardar el nombre de un
+// dominio suelto: "Network Persistent State" (bulk de conexiones DNS/QUIC pre-resueltas)
+// y, en Opera, "suggestions_cache.json" (autocompletado de la barra de direcciones)
+// también lo hacen. En vez de mapear a mano cada estructura interna, se recorre el JSON
+// completo y se elimina cualquier clave u hoja de texto cuyo valor mencione el dominio —
+// es el mismo criterio, aplicado de forma genérica a cualquiera de estos archivos.
+async function stripDomainFromJsonFile(filePath, domain) {
+  if (!(await existingPath(filePath))) return 0
+  let data
+  try {
+    data = JSON.parse(await fs.readFile(filePath, 'utf8'))
+  } catch {
+    return 0
+  }
+
+  let removed = 0
+  const mentionsDomain = (value) => {
+    if (typeof value === 'string') return value.toLowerCase().includes(domain)
+    try {
+      return JSON.stringify(value).toLowerCase().includes(domain)
+    } catch {
+      return false
+    }
+  }
+  const clean = (node) => {
+    if (Array.isArray(node)) {
+      return node.filter((item) => {
+        if (mentionsDomain(item)) {
+          removed += 1
+          return false
+        }
+        if (item && typeof item === 'object') clean(item)
+        return true
+      })
+    }
+    if (node && typeof node === 'object') {
+      for (const key of Object.keys(node)) {
+        if (key.toLowerCase().includes(domain) || mentionsDomain(node[key])) {
+          delete node[key]
+          removed += 1
+        } else if (node[key] && typeof node[key] === 'object') {
+          node[key] = clean(node[key])
+        }
+      }
+    }
+    return node
+  }
+
+  clean(data)
+  if (removed > 0) {
+    try {
+      await fs.writeFile(filePath, JSON.stringify(data))
+    } catch {
+      return 0
+    }
+  }
+  return removed
+}
+
 async function clearChromiumDomainData(browserId, domain) {
   const profileDirs = await findChromiumProfileDirs(browserId)
   const like = `%${domain}%`
@@ -574,27 +674,8 @@ async function clearChromiumDomainData(browserId, domain) {
       }
     }
 
-    const prefsPath = path.join(dir, 'Preferences')
-    if (await existingPath(prefsPath)) {
-      try {
-        const raw = await fs.readFile(prefsPath, 'utf8')
-        const prefs = JSON.parse(raw)
-        const exceptions = prefs.profile?.content_settings?.exceptions
-        if (exceptions) {
-          for (const key of Object.keys(exceptions)) {
-            const map = exceptions[key]
-            for (const pattern of Object.keys(map || {})) {
-              if (pattern.toLowerCase().includes(domain)) {
-                delete map[pattern]
-                permissionsPatched += 1
-              }
-            }
-          }
-          if (permissionsPatched > 0) await fs.writeFile(prefsPath, JSON.stringify(prefs))
-        }
-      } catch {
-        // Preferences bloqueado o con formato inesperado: se omite.
-      }
+    for (const fname of ['Preferences', 'Network Persistent State', 'suggestions_cache.json']) {
+      permissionsPatched += await stripDomainFromJsonFile(path.join(dir, fname), domain)
     }
   }
 
@@ -834,9 +915,8 @@ export async function isBrowserInstalled(browserId) {
   if (browserId === 'epiphany') {
     return IS_LINUX && Boolean(await existingPath(EPIPHANY_DATA_DIR))
   }
-  const dir = USER_DATA_DIRS[browserId]
-  if (!dir) return false
-  return Boolean(await existingPath(dir))
+  if (!USER_DATA_DIRS[browserId]) return false
+  return (await findChromiumUserDataDirs(browserId)).length > 0
 }
 
 export async function detectInstalledBrowsers() {
@@ -889,8 +969,10 @@ export async function resetBrowserProfile(browserId) {
       }
     }
   } else {
-    const userDataDir = USER_DATA_DIRS[browserId]
-    if (await existingPath(userDataDir)) {
+    // Se borran TODAS las carpetas "User Data" candidatas (nativa + cada revisión snap
+    // instalada) para no dejar restos en una revisión anterior que el navegador podría
+    // volver a leer en un futuro refresh del snap.
+    for (const userDataDir of await findChromiumUserDataDirs(browserId)) {
       await rmWithRetry(userDataDir, { recursive: true })
       removed.push(userDataDir)
     }
@@ -978,7 +1060,13 @@ export async function backupBrowserProfile(browserId) {
     // caché con datos de perfil, así que no hace falta excluir subcarpetas.
     await runRobocopy(EPIPHANY_DATA_DIR, destDir, [])
   } else {
-    await runRobocopy(USER_DATA_DIRS[browserId], destDir, BACKUP_EXCLUDE_DIRS)
+    // Puede haber más de una carpeta "User Data" candidata (nativa + revisiones snap);
+    // se respalda cada una en su propia subcarpeta para no mezclar/pisar perfiles distintos.
+    const userDataDirs = await findChromiumUserDataDirs(browserId)
+    for (const userDataDir of userDataDirs) {
+      const revisionDest = userDataDirs.length > 1 ? path.join(destDir, path.basename(path.dirname(path.dirname(userDataDir)))) : destDir
+      await runRobocopy(userDataDir, revisionDest, BACKUP_EXCLUDE_DIRS)
+    }
   }
 
   const sizeBytes = await getDirSize(destDir)
