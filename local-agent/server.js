@@ -34,6 +34,7 @@ import {
   resetBrowserProfile,
   clearMultipleBrowsersData,
   resetMultipleBrowserProfiles,
+  backupSelectedItems,
   openQuickFolder,
   runSfcScan,
   runDismRestoreHealth,
@@ -46,7 +47,7 @@ import {
   IS_WINDOWS,
   IS_LINUX,
 } from './commands.js'
-import { AGENT_VERSION, startUpdateChecker } from './updater.js'
+import { AGENT_VERSION, startUpdateChecker, checkAndApplyUpdate } from './updater.js'
 
 let isSea = () => false
 try {
@@ -255,6 +256,22 @@ controlApp.post('/stop', (_req, res) => {
   stopWorker()
   res.json({ ok: true, running: false })
 })
+// Fuerza el chequeo de actualización ya mismo, sin esperar el intervalo de 6hs de
+// startUpdateChecker. Vive en el panel de control (5178) porque ese sigue arriba aunque
+// el worker (5177) esté pausado o a punto de reiniciarse por la propia actualización.
+controlApp.get('/version', (_req, res) => res.json({ ok: true, version: AGENT_VERSION, isSea: isSea() }))
+controlApp.post('/update-now', (_req, res) => {
+  if (!isSea()) {
+    res.status(400).json({
+      ok: false,
+      error: 'Esta instancia corre en modo desarrollo (node server.js), no como binario instalado — no hay nada que autoactualizar acá.',
+    })
+    return
+  }
+  res.json({ ok: true, checking: true })
+  checkAndApplyUpdate()
+})
+
 controlApp.post('/uninstall', (_req, res) => {
   res.json({ ok: true })
   setTimeout(() => {
@@ -444,6 +461,41 @@ app.post('/reset-browser-profiles', (req, res) => {
 
 app.get('/reset-browser-profiles-status/:jobId', (req, res) => {
   const job = resetJobs.get(req.params.jobId)
+  if (!job) {
+    res.status(404).json({ ok: false, error: 'Job no encontrado' })
+    return
+  }
+  res.json({ ok: true, ...job })
+})
+
+// Mismo motivo que clear-browsers-data/reset-browser-profiles: "Respaldar Todo" con
+// checkboxes también cierra el navegador (backupBrowserProfile) y se cortaba a mitad de
+// cola si el panel estaba abierto en el mismo navegador que se estaba respaldando.
+const backupSelectedJobs = new Map()
+
+app.post('/backup-selected', (req, res) => {
+  const { items } = req.body
+  const jobId = crypto.randomUUID()
+  const job = { status: 'running', steps: [], error: null }
+  backupSelectedJobs.set(jobId, job)
+
+  backupSelectedItems(items, (steps) => {
+    job.steps = steps
+  })
+    .then(({ steps }) => {
+      job.status = 'done'
+      job.steps = steps
+    })
+    .catch((err) => {
+      job.status = 'error'
+      job.error = err.message
+    })
+
+  res.json({ ok: true, jobId })
+})
+
+app.get('/backup-selected-status/:jobId', (req, res) => {
+  const job = backupSelectedJobs.get(req.params.jobId)
   if (!job) {
     res.status(404).json({ ok: false, error: 'Job no encontrado' })
     return

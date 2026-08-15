@@ -26,15 +26,14 @@ import {
 import Card from './Card'
 import {
   getInstalledBrowsers,
-  backupBrowserProfile,
-  backupBrowserBookmarks,
-  openPasswordManager,
   openBackupFolder,
   clearDomainData,
   startClearBrowsersData,
   getClearBrowsersDataStatus,
   startResetBrowserProfiles,
   getResetBrowserProfilesStatus,
+  startBackupSelected,
+  getBackupSelectedStatus,
 } from '../lib/localAgent'
 import { useLanguage } from '../lib/i18n'
 
@@ -91,6 +90,7 @@ export default function BrowserManager({ onNotify }) {
   const [processingReset, setProcessingReset] = useState(false)
   const deletePollRef = useRef(null)
   const resetPollRef = useRef(null)
+  const backupPollRef = useRef(null)
 
   useEffect(() => {
     getInstalledBrowsers()

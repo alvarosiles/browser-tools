@@ -83,6 +83,23 @@ export function getResetBrowserProfilesStatus(jobId) {
   return requestLocalGet(`reset-browser-profiles-status/${jobId}`)
 }
 
+export async function startBackupSelected(items) {
+  const res = await fetch(`${LOCAL_AGENT_BASE_URL}/backup-selected`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  }).catch(() => {
+    throw new Error('No se pudo conectar con el servicio local. ¿Está corriendo local-agent?')
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo iniciar el respaldo.')
+  return data.jobId
+}
+
+export function getBackupSelectedStatus(jobId) {
+  return requestLocalGet(`backup-selected-status/${jobId}`)
+}
+
 export function openControlPanel() {
   return requestLocalAction('open-control-panel')
 }

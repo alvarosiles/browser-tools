@@ -1144,6 +1144,46 @@ export async function backupAll(onProgress) {
   return { destRoot, results, finishedAt: new Date().toISOString() }
 }
 
+// Igual que backupAll pero con selección granular (perfil/marcadores/contraseñas por
+// navegador, la que arma "Respaldar Todo" con checkboxes). Corre como job por el mismo
+// motivo: backupBrowserProfile cierra el navegador, y si es el que aloja el panel, una
+// cola secuencial hecha en el cliente se corta ahí mismo.
+export async function backupSelectedItems(items, onProgress) {
+  const steps = []
+
+  for (const { browserId, profile, bookmarks, passwords } of items) {
+    if (profile) {
+      try {
+        const { destDir, sizeBytes } = await backupBrowserProfile(browserId)
+        steps.push({ id: `${browserId}-profile`, browserId, kind: 'profile', label: BROWSER_LABELS[browserId], status: 'success', destDir, sizeBytes })
+      } catch (err) {
+        steps.push({ id: `${browserId}-profile`, browserId, kind: 'profile', label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+      }
+      onProgress?.(steps.slice())
+    }
+    if (bookmarks) {
+      try {
+        await backupBrowserBookmarks(browserId)
+        steps.push({ id: `${browserId}-bookmarks`, browserId, kind: 'bookmarks', label: BROWSER_LABELS[browserId], status: 'success' })
+      } catch (err) {
+        steps.push({ id: `${browserId}-bookmarks`, browserId, kind: 'bookmarks', label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+      }
+      onProgress?.(steps.slice())
+    }
+    if (passwords) {
+      try {
+        await openPasswordManager(browserId)
+        steps.push({ id: `${browserId}-passwords`, browserId, kind: 'passwords', label: BROWSER_LABELS[browserId], status: 'success' })
+      } catch (err) {
+        steps.push({ id: `${browserId}-passwords`, browserId, kind: 'passwords', label: BROWSER_LABELS[browserId], status: 'error', error: err.message })
+      }
+      onProgress?.(steps.slice())
+    }
+  }
+
+  return { steps, finishedAt: new Date().toISOString() }
+}
+
 // Igual que backupAll: si el panel que dispara esto está abierto en uno de los
 // navegadores que se están cerrando/borrando, la pestaña muere a mitad de la cola y el
 // resto nunca se procesa — por eso esto corre como job en el servidor (server.js expone
