@@ -20,6 +20,8 @@ import {
   PawPrint,
   Sparkles,
   Eraser,
+  AlertTriangle,
+  Trash2,
 } from 'lucide-react'
 import Card from './Card'
 import {
@@ -30,6 +32,7 @@ import {
   openPasswordManager,
   openBackupFolder,
   clearDomainData,
+  resetBrowserProfile,
 } from '../lib/localAgent'
 import { useLanguage } from '../lib/i18n'
 
@@ -82,6 +85,8 @@ export default function BrowserManager({ onNotify }) {
   const [backupResults, setBackupResults] = useState(null)
   const [domain, setDomain] = useState('')
   const [processingDomain, setProcessingDomain] = useState(false)
+  const [resetSelection, setResetSelection] = useState(() => Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
+  const [processingReset, setProcessingReset] = useState(false)
 
   useEffect(() => {
     getInstalledBrowsers()
@@ -238,6 +243,41 @@ export default function BrowserManager({ onNotify }) {
       onNotify(err.message)
     } finally {
       setProcessingDomain(false)
+    }
+  }
+
+  const selectedResetCount = Object.values(resetSelection).filter(Boolean).length
+
+  const toggleReset = (browserId) => {
+    setResetSelection((prev) => ({ ...prev, [browserId]: !prev[browserId] }))
+  }
+
+  const handleProcessReset = async () => {
+    const targets = BROWSERS.filter((b) => resetSelection[b.id])
+    if (targets.length === 0) return
+    if (
+      !window.confirm(
+        `Esto borra POR COMPLETO el perfil de ${targets.map((b) => b.name).join(', ')}: extensiones, marcadores, contraseñas guardadas, tema, todo. No hay forma de deshacerlo. ¿Confirmás?`
+      )
+    ) {
+      return
+    }
+
+    setProcessingReset(true)
+    try {
+      for (const browser of targets) {
+        try {
+          const result = await resetBrowserProfile(browser.id)
+          if (!result.skipped) {
+            onNotify(t('browserReset.doneNotify', { name: browser.name }))
+          }
+        } catch (err) {
+          onNotify(`${browser.name}: ${err.message}`)
+        }
+      }
+    } finally {
+      setProcessingReset(false)
+      setResetSelection(Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
     }
   }
 
@@ -507,6 +547,44 @@ export default function BrowserManager({ onNotify }) {
             {processingDomain ? t('domainCleaner.submitting') : t('domainCleaner.submit')}
           </button>
         </form>
+      </div>
+
+      <div className="rounded-xl border border-red-300/60 bg-red-50 px-4 py-3.5 dark:border-red-900/50 dark:bg-red-950/20">
+        <div className="mb-1 flex items-center gap-1.5">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+          <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">{t('browserReset.title')}</h3>
+        </div>
+        <p className="mb-2.5 text-xs text-red-700/80 dark:text-red-400/70">{t('browserReset.description')}</p>
+
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {BROWSERS.map((browser) => (
+            <label
+              key={browser.id}
+              className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300"
+            >
+              <input
+                type="checkbox"
+                checked={resetSelection[browser.id]}
+                onChange={() => toggleReset(browser.id)}
+                disabled={processingReset}
+                className="h-4 w-4 cursor-pointer accent-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+              />
+              <browser.icon className={`h-3.5 w-3.5 ${browser.color}`} />
+              {browser.name}
+            </label>
+          ))}
+        </div>
+
+        <button
+          onClick={handleProcessReset}
+          disabled={selectedResetCount === 0 || processingReset}
+          className="flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 active:bg-red-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
+        >
+          {processingReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          {processingReset
+            ? t('browserReset.processing')
+            : `${t('browserReset.process')}${selectedResetCount ? ` (${selectedResetCount})` : ''}`}
+        </button>
       </div>
     </Card>
   )

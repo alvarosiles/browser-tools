@@ -43,6 +43,10 @@ export function clearDomainData(domain) {
   return requestLocalAction('clear-domain-data', { domain })
 }
 
+export function resetBrowserProfile(browserId) {
+  return requestLocalAction('reset-browser-profile', { browserId })
+}
+
 export function openControlPanel() {
   return requestLocalAction('open-control-panel')
 }

@@ -846,6 +846,63 @@ export async function detectInstalledBrowsers() {
   return Object.fromEntries(entries)
 }
 
+// A diferencia de clearBrowserData (que borra tipos de dato puntuales dentro del perfil),
+// esto elimina la carpeta de perfil ENTERA: extensiones, marcadores, contraseñas
+// guardadas, tema, configuración — todo. El navegador queda como recién instalado, no
+// solo "limpio". Irreversible y sin vuelta atrás (no hay papelera para esto).
+export async function resetBrowserProfile(browserId) {
+  if (!ALL_BROWSER_IDS.includes(browserId)) throw new Error(`Navegador no soportado: ${browserId}`)
+  if (!(await isBrowserInstalled(browserId))) {
+    return { browserId, skipped: true }
+  }
+
+  await closeBrowser(browserId)
+
+  const removed = []
+
+  if (GECKO_BROWSER_IDS.has(browserId)) {
+    // Se recorren TODOS los candidatos (nativo/snap/flatpak en Linux) porque, a diferencia
+    // de resolveGeckoDirs (que solo necesita uno para leer), acá el objetivo es no dejar
+    // ningún perfil viejo de ninguna variante de instalación.
+    for (const candidate of GECKO_PROFILE_CANDIDATES[browserId]) {
+      for (const dir of [candidate.roaming, candidate.local]) {
+        if (await existingPath(dir)) {
+          await rmWithRetry(dir, { recursive: true })
+          removed.push(dir)
+        }
+      }
+    }
+    if (browserId === 'firefox') {
+      const profilesIni = IS_LINUX
+        ? null
+        : path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'profiles.ini')
+      if (profilesIni && (await existingPath(profilesIni))) {
+        await rmWithRetry(profilesIni)
+        removed.push(profilesIni)
+      }
+    }
+  } else if (browserId === 'epiphany') {
+    for (const dir of [EPIPHANY_DATA_DIR, EPIPHANY_CACHE_DIR]) {
+      if (await existingPath(dir)) {
+        await rmWithRetry(dir, { recursive: true })
+        removed.push(dir)
+      }
+    }
+  } else {
+    const userDataDir = USER_DATA_DIRS[browserId]
+    if (await existingPath(userDataDir)) {
+      await rmWithRetry(userDataDir, { recursive: true })
+      removed.push(userDataDir)
+    }
+  }
+
+  if (removed.length === 0) {
+    throw new Error(`No se encontró perfil de ${BROWSER_LABELS[browserId]} para borrar`)
+  }
+
+  return { browserId, removed }
+}
+
 // robocopy usa códigos de salida en forma de bitmap: 0-7 son distintos grados de éxito
 // (archivos copiados, algunos ya iguales, etc.), solo 8+ indica un fallo real.
 function runRobocopy(src, dest, excludeDirs = []) {

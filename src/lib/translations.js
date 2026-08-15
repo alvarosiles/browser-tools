@@ -86,6 +86,14 @@ export const translations = {
       touchedNotify: '{domain}: datos borrados en {browsers}.',
       notFoundNotify: '{domain}: no se encontraron datos en ningún navegador.',
     },
+    browserReset: {
+      title: 'Reset Completo de Perfil',
+      description:
+        'Borra el perfil ENTERO del navegador: extensiones, marcadores, contraseñas guardadas, tema, toda la configuración. Queda como recién instalado. Irreversible.',
+      process: 'Reset completo',
+      processing: 'Reseteando...',
+      doneNotify: '{name}: perfil reseteado por completo.',
+    },
     browserBackup: {
       title: '💾 Respaldo de Navegadores',
       description: 'Respalde la información importante de los navegadores antes del mantenimiento.',
@@ -291,6 +299,14 @@ export const translations = {
       submitting: 'Clearing...',
       touchedNotify: '{domain}: data cleared in {browsers}.',
       notFoundNotify: '{domain}: no data found in any browser.',
+    },
+    browserReset: {
+      title: 'Full Profile Reset',
+      description:
+        'Deletes the ENTIRE browser profile: extensions, bookmarks, saved passwords, theme, all settings. Ends up like a fresh install. Irreversible.',
+      process: 'Full reset',
+      processing: 'Resetting...',
+      doneNotify: '{name}: profile fully reset.',
     },
     browserBackup: {
       title: '💾 Browser Backup',

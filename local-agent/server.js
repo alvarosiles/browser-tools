@@ -31,6 +31,7 @@ import {
   removeStuckJobs,
   restartSpooler,
   getSystemInfo,
+  resetBrowserProfile,
   openQuickFolder,
   runSfcScan,
   runDismRestoreHealth,
@@ -281,6 +282,7 @@ function handle(action, fn) {
 }
 
 handle('clear-browser-data', ({ browserId, types }) => clearBrowserData(browserId, types))
+handle('reset-browser-profile', ({ browserId }) => resetBrowserProfile(browserId))
 handle('clear-domain-data', ({ domain }) => clearDomainData(domain))
 handle('open-control-panel', () => openControlPanel())
 handle('open-windows-settings', () => openWindowsSettings())
