@@ -37,8 +37,16 @@ const destExe = path.join(downloadsDir, artifactName)
 fs.copyFileSync(builtExe, destExe)
 if (!isWindows) fs.chmodSync(destExe, 0o755)
 
-for (const script of ['install.ps1', 'install.sh']) {
+for (const script of ['install.ps1', 'install.sh', 'install-linux.sh']) {
   fs.copyFileSync(path.join(localAgentDir, script), path.join(downloadsDir, script))
+}
+
+// install-linux.sh descarga estos archivos fuente vía Node (no el binario SEA) para
+// instalar en Linux sin necesitar una máquina Linux para compilar el ejecutable.
+const agentSrcDir = path.join(downloadsDir, 'agent')
+fs.mkdirSync(agentSrcDir, { recursive: true })
+for (const file of ['package.json', 'package-lock.json', 'server.js', 'commands.js', 'updater.js']) {
+  fs.copyFileSync(path.join(localAgentDir, file), path.join(agentSrcDir, file))
 }
 
 const versionJsonPath = path.join(downloadsDir, 'version.json')

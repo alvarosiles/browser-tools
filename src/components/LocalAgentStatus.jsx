@@ -93,7 +93,7 @@ export default function LocalAgentStatus({ onNotify }) {
             <Download className="h-3 w-3" />
             Windows
           </a>
-          <a href={`${import.meta.env.BASE_URL}downloads/browser-tools-agent`} download className="inline-flex items-center gap-1 underline hover:text-amber-900 dark:hover:text-amber-100">
+          <a href={`${import.meta.env.BASE_URL}downloads/install.sh`} download className="inline-flex items-center gap-1 underline hover:text-amber-900 dark:hover:text-amber-100">
             <Download className="h-3 w-3" />
             Linux
           </a>

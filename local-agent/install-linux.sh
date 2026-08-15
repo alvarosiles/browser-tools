@@ -11,7 +11,7 @@ NODE_VERSION="22.23.2"
 NODE_ARCH="x64"
 NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"
 NODE_HOME="${INSTALL_DIR}/node"
-AGENT_URL="${AGENT_REPO_URL:-https://raw.githubusercontent.com/alvarosiles/browser-tools/gh-pages}/local-agent"
+AGENT_URL="${AGENT_REPO_URL:-https://alvarosiles.github.io/browser-tools/downloads/agent}"
 SYSTEMD_UNIT="browser-tools-agent"
 SYSTEMD_PATH="${HOME}/.config/systemd/user/${SYSTEMD_UNIT}.service"
 
