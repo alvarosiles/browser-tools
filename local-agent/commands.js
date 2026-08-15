@@ -71,8 +71,17 @@ async function findChromiumUserDataDirs(browserId) {
     const revisions = await fs.readdir(snapRoot, { withFileTypes: true }).catch(() => [])
     for (const rev of revisions) {
       if (!rev.isDirectory()) continue
-      const dir = path.join(snapRoot, rev.name, '.config', ...configSubpath)
-      if (await existingPath(dir)) dirs.push(dir)
+      // No todos los snaps confinan del mismo modo: Brave/Opera guardan el perfil bajo
+      // "<revisión>/.config/<subpath>", pero Chromium lo guarda directo en
+      // "<revisión>/<subpath>" (sin ".config" de por medio, incluida la carpeta "common"
+      // que comparten todas las revisiones tras el primer refresh del snap). Se prueban
+      // ambos patrones en vez de asumir uno solo.
+      for (const dir of [
+        path.join(snapRoot, rev.name, '.config', ...configSubpath),
+        path.join(snapRoot, rev.name, ...configSubpath),
+      ]) {
+        if (await existingPath(dir)) dirs.push(dir)
+      }
     }
   }
 
@@ -264,18 +273,47 @@ const GECKO_PROFILE_CANDIDATES = {
           local: path.join(os.homedir(), 'AppData', 'Local', 'Mozilla', 'Firefox', 'Profiles'),
         },
       ],
-  librewolf: [
-    {
-      roaming: IS_LINUX ? path.join(os.homedir(), '.librewolf') : path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
-      local: IS_LINUX ? path.join(os.homedir(), '.cache', 'librewolf') : path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
-    },
-  ],
-  zen: [
-    {
-      roaming: IS_LINUX ? path.join(os.homedir(), '.zen') : path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
-      local: IS_LINUX ? path.join(os.homedir(), '.cache', 'zen') : path.join(os.homedir(), 'AppData', 'Local', 'zen'),
-    },
-  ],
+  // El paquete .deb oficial de LibreWolf (repo de librewolf.net, el más común en Ubuntu/Debian)
+  // anida los perfiles en "~/.config/librewolf/librewolf/<perfil>" (una carpeta "librewolf"
+  // dentro de otra) en vez de "~/.config/librewolf/<perfil>" directo — se comprobó en
+  // producción que la ruta plana (usada por paquetes AUR/otros) no encontraba nada ahí. Se
+  // prueban ambos patrones, del más común al menos común.
+  librewolf: IS_LINUX
+    ? [
+        {
+          roaming: path.join(os.homedir(), '.config', 'librewolf', 'librewolf'),
+          local: path.join(os.homedir(), '.cache', 'librewolf', 'librewolf'),
+        },
+        {
+          roaming: path.join(os.homedir(), '.librewolf'),
+          local: path.join(os.homedir(), '.cache', 'librewolf'),
+        },
+      ]
+    : [
+        {
+          roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'librewolf'),
+          local: path.join(os.homedir(), 'AppData', 'Local', 'librewolf'),
+        },
+      ],
+  // El paquete .deb oficial de Zen Browser usa "~/.config/zen/<perfil>" directo (a diferencia
+  // de LibreWolf, sin anidar); "~/.zen" queda como candidato de respaldo para otros empaquetados.
+  zen: IS_LINUX
+    ? [
+        {
+          roaming: path.join(os.homedir(), '.config', 'zen'),
+          local: path.join(os.homedir(), '.cache', 'zen'),
+        },
+        {
+          roaming: path.join(os.homedir(), '.zen'),
+          local: path.join(os.homedir(), '.cache', 'zen'),
+        },
+      ]
+    : [
+        {
+          roaming: path.join(os.homedir(), 'AppData', 'Roaming', 'zen'),
+          local: path.join(os.homedir(), 'AppData', 'Local', 'zen'),
+        },
+      ],
 }
 const GECKO_BROWSER_IDS = new Set(Object.keys(GECKO_PROFILE_CANDIDATES))
 
