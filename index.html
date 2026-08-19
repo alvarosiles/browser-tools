@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Browser Data Cleaner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1>🧹 Browser Cleaner</h1>
+          <p class="version">v1.0.0</p>
+        </div>
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-section="browsers">
+            <span class="icon">🌐</span>
+            <span>Navegadores</span>
+          </button>
+          <button class="nav-item" data-section="protected">
+            <span class="icon">🛡️</span>
+            <span>Dominios Protegidos</span>
+          </button>
+          <button class="nav-item" data-section="clean-domain">
+            <span class="icon">🧹</span>
+            <span>Borrar por Dominio</span>
+          </button>
+          <button class="nav-item" data-section="activity">
+            <span class="icon">📋</span>
+            <span>Registro de Actividad</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <p class="security-badge">🔒 Local only · No data leaves</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="main-header">
+          <h2 id="section-title">Navegadores Instalados</h2>
+          <div class="header-info">
+            <span id="status-badge" class="status-badge">Ready</span>
+          </div>
+        </header>
+
+        <!-- SECTION: BROWSERS -->
+        <section id="section-browsers" class="content-section active">
+          <div class="browsers-grid" id="browsersContainer">
+            <!-- Dynamically filled -->
+          </div>
+        </section>
+
+        <!-- SECTION: PROTECTED DOMAINS -->
+        <section id="section-protected" class="content-section">
+          <div class="protected-domains">
+            <div class="section-controls">
+              <input id="search" type="text" class="search-input" placeholder="🔍 Buscar dominio..." />
+              <div class="section-buttons">
+                <button id="importBtn" class="btn btn-secondary">📥 Importar</button>
+                <button id="exportBtn" class="btn btn-secondary">📤 Exportar</button>
+              </div>
+            </div>
+
+            <div class="table-wrapper">
+              <table class="protected-table" id="protectedTable">
+                <thead>
+                  <tr>
+                    <th>Descripción</th>
+                    <th>Dominio</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <button id="addDomain" class="btn btn-primary" style="margin-top: 16px;">＋ Agregar dominio</button>
+          </div>
+        </section>
+
+        <!-- SECTION: CLEAN SINGLE DOMAIN -->
+        <section id="section-clean-domain" class="content-section">
+          <div class="clean-domain-panel">
+            <div class="info-box">
+              <p>Escribe un dominio (o pega la URL) y se borran solo sus cookies, historial, permisos y datos guardados — en todos los navegadores compatibles, sin tocar el resto.</p>
+            </div>
+
+            <div class="input-group">
+              <input id="domainInput" type="text" class="domain-input" placeholder="ej: ejemplo.com o https://ejemplo.com" />
+              <button id="cleanDomainBtn" class="btn btn-danger">🧹 Borrar</button>
+            </div>
+
+            <div id="domainWarning" class="warning-box" style="display: none;">
+              <p id="warningMessage"></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION: ACTIVITY LOG -->
+        <section id="section-activity" class="content-section">
+          <div class="activity-panel">
+            <div class="activity-controls">
+              <button id="clearLogsBtn" class="btn btn-secondary">🗑️ Limpiar logs</button>
+            </div>
+            <div class="activity-log" id="activityLog">
+              <p class="empty-state">No hay actividades registradas</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- MODALS -->
+    <div id="confirmModal" class="modal">
+      <div class="modal-content">
+        <h3 id="confirmTitle">⚠️ Confirmar limpieza</h3>
+        <div id="confirmBody" class="modal-body"></div>
+        <div class="modal-actions">
+          <button id="cancelBtn" class="btn btn-secondary">Cancelar</button>
+          <button id="confirmBtn" class="btn btn-danger">🧹 Borrar datos</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="backupModal" class="modal">
+      <div class="modal-content">
+        <h3>💾 Seleccionar qué respaldar</h3>
+        <div class="modal-body">
+          <label class="checkbox-item">
+            <input type="checkbox" value="history" checked /> Historial
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" value="cookies" checked /> Cookies
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" value="bookmarks" checked /> Marcadores
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" value="localStorage" /> Local Storage
+          </label>
+          <label class="checkbox-item">
+            <input type="checkbox" value="prefs" /> Preferencias
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button id="backupCancelBtn" class="btn btn-secondary">Cancelar</button>
+          <button id="backupConfirmBtn" class="btn btn-primary">💾 Crear respaldo</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

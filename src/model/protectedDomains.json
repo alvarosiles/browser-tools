@@ -1,0 +1,128 @@
+[
+  {
+    "id": "github-main",
+    "description": "GitHub principal",
+    "domain": "github.com",
+    "protected": true
+  },
+  {
+    "id": "github-pages",
+    "description": "GitHub Pages",
+    "domain": "*.github.io",
+    "protected": true
+  },
+  {
+    "id": "github-gists",
+    "description": "GitHub Gists",
+    "domain": "gist.github.com",
+    "protected": true
+  },
+  {
+    "id": "google-main",
+    "description": "Google principal",
+    "domain": "google.com",
+    "protected": true
+  },
+  {
+    "id": "google-gmail",
+    "description": "Gmail",
+    "domain": "mail.google.com",
+    "protected": true
+  },
+  {
+    "id": "google-accounts",
+    "description": "Google Accounts",
+    "domain": "accounts.google.com",
+    "protected": true
+  },
+  {
+    "id": "google-drive",
+    "description": "Google Drive",
+    "domain": "drive.google.com",
+    "protected": true
+  },
+  {
+    "id": "google-subdomains",
+    "description": "Todos los servicios Google",
+    "domain": "*.google.com",
+    "protected": true
+  },
+  {
+    "id": "claude-main",
+    "description": "Claude AI",
+    "domain": "claude.ai",
+    "protected": true
+  },
+  {
+    "id": "claude-api",
+    "description": "Anthropic API",
+    "domain": "api.anthropic.com",
+    "protected": true
+  },
+  {
+    "id": "anthropic-main",
+    "description": "Anthropic.com",
+    "domain": "anthropic.com",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-main",
+    "description": "WhatsApp principal",
+    "domain": "whatsapp.com",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-subdomains",
+    "description": "Todos los subdominios WhatsApp",
+    "domain": "*.whatsapp.com",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-wa-me",
+    "description": "WhatsApp wa.me",
+    "domain": "wa.me",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-wa-me-subdomains",
+    "description": "Todos los subdominios wa.me",
+    "domain": "*.wa.me",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-web",
+    "description": "WhatsApp Web",
+    "domain": "web.whatsapp.com",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-connection-c",
+    "description": "WhatsApp Connection (c.whatsapp.net)",
+    "domain": "c.whatsapp.net",
+    "protected": true
+  },
+  {
+    "id": "whatsapp-connection-s",
+    "description": "WhatsApp Connection (s.whatsapp.net)",
+    "domain": "s.whatsapp.net",
+    "protected": true
+  },
+  {
+    "id": "facebook-main",
+    "description": "Facebook",
+    "domain": "facebook.com",
+    "protected": true
+  },
+  {
+    "id": "instagram-main",
+    "description": "Instagram",
+    "domain": "instagram.com",
+    "protected": true
+  },
+  {
+    "id": "meta-main",
+    "description": "Meta.com",
+    "domain": "meta.com",
+    "protected": true
+  }
+]

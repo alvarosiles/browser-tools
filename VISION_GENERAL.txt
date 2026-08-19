@@ -1,0 +1,198 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                  🧹 BROWSER DATA CLEANER - VISIÓN GENERAL                 ║
+║                                                                            ║
+║           Aplicación de escritorio profesional para limpiar y              ║
+║         respaldar datos de navegadores con protección de dominios         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📦 ESTRUCTURA DEL PROYECTO
+═══════════════════════════════════════════════════════════════════════════════
+
+   browser-data-cleaner/
+   ├─ src/
+   │  ├─ adapters/          → Conectores por navegador (Chrome, Firefox, etc)
+   │  ├─ core/              → Motor principal (Detector, Manager, Logs)
+   │  ├─ utils/             → Utilidades (paths, dominios, FS)
+   │  └─ model/             → Datos (dominios protegidos)
+   │
+   ├─ main.js              → Proceso principal Electron (IPC handlers)
+   ├─ preload.js           → API segura renderer→main
+   ├─ renderer.js          → Lógica de interfaz (200+ líneas)
+   ├─ index.html           → Estructura HTML
+   ├─ styles.css           → Diseño profesional + dark mode
+   │
+   └─ package.json         → Dependencias (Electron, SQLite3, UUID)
+
+
+🎯 FUNCIONALIDADES PRINCIPALES
+═══════════════════════════════════════════════════════════════════════════════
+
+   1️⃣  GESTIONAR DOMINIOS PROTEGIDOS
+       ✓ Crear lista editable
+       ✓ Agregar/Quitar dominios
+       ✓ Buscar por nombre o dominio
+       ✓ Importar/Exportar JSON
+       ✓ Preconfigurados: Google, GitHub, Claude (21 dominios)
+
+   2️⃣  LIMPIAR DATOS DE NAVEGADORES
+       ✓ Detecta automáticamente 9 navegadores instalados
+       ✓ Borra TODO excepto dominios protegidos
+       ✓ Historial, Cookies, Cache, LocalStorage, etc.
+       ✓ Confirmación ANTES de cada operación
+
+   3️⃣  LIMPIAR DATOS DE UN DOMINIO
+       ✓ Escribe o pega el dominio (ej: metabet.tv)
+       ✓ Borra sus datos en TODOS los navegadores
+       ✓ Valida que no esté en dominios protegidos
+       ✓ No toca el resto de sitios
+
+   4️⃣  RESPALDAR DATOS
+       ✓ Crear backups timestamped
+       ✓ Elegir qué respaldar (Historia, Cookies, etc)
+       ✓ Estructura: BrowserBackup/[Nav]/[Timestamp]/
+
+   5️⃣  VER REGISTRO DE ACTIVIDAD
+       ✓ Log persistente con timestamps
+       ✓ Todas las operaciones registradas
+       ✓ Sin información sensible
+
+
+🔒 LA REGLA DE ORO: DOMINIOS PROTEGIDOS
+═══════════════════════════════════════════════════════════════════════════════
+
+   Si proteges: github.com, google.com, claude.ai
+
+   Al hacer "Limpiar todos los datos":
+   ✓ SE BORRAN: cookies de Facebook, Netflix, etc
+   ✓ SE PROTEGEN: cookies de github.com, google.com, claude.ai
+   ✓ RESULTADO: Tus sesiones en GitHub y Google siguen activas
+
+
+🌐 NAVEGADORES SOPORTADOS (9)
+═══════════════════════════════════════════════════════════════════════════════
+
+   ✓ Google Chrome
+   ✓ Microsoft Edge
+   ✓ Mozilla Firefox
+   ✓ Brave Browser
+   ✓ Opera
+   ✓ Vivaldi
+   ✓ LibreWolf
+   ✓ Zen Browser
+   ✓ GNOME Web
+
+   → Detección automática en Windows, Linux, macOS
+
+
+📱 INTERFAZ DE USUARIO
+═══════════════════════════════════════════════════════════════════════════════
+
+   SIDEBAR:                          CONTENIDO:
+   ┌────────────────────┐            ┌─────────────────────────────────┐
+   │ 🧹 Browser Cleaner │            │ 🌐 Navegadores Instalados       │
+   │ v1.0.0             │            │ ┌─────────────────────────────┐ │
+   │                    │            │ │ 🌐 Google Chrome ✓         │ │
+   │ 🌐 Navegadores    │            │ │ 🧹 Limpiar | 💾 Backup   │ │
+   │ 🛡️  Dominios      │            │ └─────────────────────────────┘ │
+   │ 🧹 Borrar Dominio │            │ ┌─────────────────────────────┐ │
+   │ 📋 Actividad      │            │ │ 🦊 Mozilla Firefox ✓        │ │
+   │                    │            │ │ 🧹 Limpiar | 💾 Backup   │ │
+   │ 🔒 Local only      │            │ └─────────────────────────────┘ │
+   └────────────────────┘            └─────────────────────────────────┘
+
+
+🛠️ ARQUITECTURA TÉCNICA
+═══════════════════════════════════════════════════════════════════════════════
+
+   RENDERER (UI)
+   ↓ (IPC - preload.js)
+   MAIN PROCESS
+   ├─ BrowserManager
+   │  ├─ BrowserDetector → Detecta navegadores
+   │  ├─ ChromiumAdapter → Opera sobre Chrome, Edge, etc
+   │  └─ FirefoxAdapter  → Opera sobre Firefox, LibreWolf, etc
+   │
+   ├─ DomainMatcher
+   │  ├─ Coincidencia exacta: github.com = github.com
+   │  ├─ Wildcard: *.github.io = user.github.io
+   │  └─ Protección: no borra dominios en lista
+   │
+   ├─ FsUtils
+   │  └─ Operaciones seguras de archivos
+   │
+   └─ ActivityLog
+      └─ Registro persistente
+
+
+🔐 SEGURIDAD
+═══════════════════════════════════════════════════════════════════════════════
+
+   ✓ TODO LOCAL - datos nunca salen de tu máquina
+   ✓ NO envía cookies, tokens, passwords a servidores
+   ✓ Confirmación ANTES de cada operación
+   ✓ Allowlist REAL (no borra datos de dominios protegidos)
+   ✓ Detecta navegadores abiertos y advierte
+   ✓ Sin información sensible en logs
+   ✓ Usa SQLite para acceso seguro a bases de datos
+
+
+📊 TIPOS DE DATOS POR NAVEGADOR
+═══════════════════════════════════════════════════════════════════════════════
+
+   Capacidad      Chrome  Firefox  Brave   Edge    Opera   Otros
+   ────────────────────────────────────────────────────────────
+   Historial      ✓       ✓        ✓       ✓       ✓       Varies
+   Cookies        ✓       ✓        ✓       ✓       ✓       Varies
+   Cache          ✓       ⚠️       ✓       ✓       ✓       Varies
+   LocalStorage   ✓       ⚠️       ✓       ✓       ✓       Varies
+   Contraseñas    ✗       ✗        ✗       ✗       ✗       ✗
+
+
+⚡ REQUISITOS
+═══════════════════════════════════════════════════════════════════════════════
+
+   Mínimos:
+   • Node.js 14+
+   • npm o yarn
+   • Windows 7+ / Linux / macOS
+
+   Instalado:
+   • Electron 26 (framework)
+   • SQLite3 (acceso a BDs)
+   • UUID (IDs únicos)
+
+
+🚀 INICIO RÁPIDO
+═══════════════════════════════════════════════════════════════════════════════
+
+   1. npm install          # Instalar dependencias
+   2. npm start            # Ejecutar aplicación
+   3. npm run dev          # Modo desarrollo (con DevTools)
+   4. npm run dist         # Compilar para Windows/Linux/macOS
+
+
+✨ RESUMEN
+═══════════════════════════════════════════════════════════════════════════════
+
+   Una aplicación profesional, completa y funcional que:
+
+   ✓ Detecta y limpia datos de 9 navegadores
+   ✓ Protege dominios críticos (GitHub, Google, Claude, etc)
+   ✓ Permite limpiar datos de sitios específicos
+   ✓ Crea respaldos seguros
+   ✓ Registra todas las operaciones
+   ✓ Funciona 100% localmente
+   ✓ Tiene interfaz moderna con dark mode
+   ✓ Está lista para compilar y distribuir
+
+   → Lista para producción
+
+
+📄 DOCUMENTACIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+   • README.md          → Guía de usuario completa
+   • IMPLEMENTACION.md  → Detalle técnico de lo implementado
+   • main.js            → Documentación en código (IPC handlers)
+   • renderer.js        → Lógica de interfaz
+

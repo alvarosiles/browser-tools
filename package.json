@@ -1,0 +1,20 @@
+{
+  "name": "browser-data-cleaner",
+  "version": "1.0.0",
+  "description": "Professional Browser Data Cleaner for Windows/Linux/macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "./node_modules/electron/dist/electron .",
+    "dev": "./node_modules/electron/dist/electron . --debug",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^26.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.0"
+  }
+}

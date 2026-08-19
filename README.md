@@ -1,97 +1,65 @@
-# IT Support Tools
+# 🧹 Browser Data Cleaner
 
-Panel web de soporte técnico para equipos Windows. Interfaz en React + Vite + Tailwind CSS (tema oscuro/claro, español/inglés) que se conecta a un **servicio local** instalable (`local-agent`) para ejecutar acciones reales sobre el sistema operativo — cosas que un navegador, por seguridad, nunca puede hacer por sí solo.
+Una aplicación de escritorio profesional, multiplataforma (Windows/Linux/macOS) para gestionar, respaldar y limpiar datos de navegadores con control granular y protección de dominios.
 
-- **Sitio publicado:** https://alvarosiles.github.io/browser-tools/
-- **Rama de desarrollo:** [`dev`](https://github.com/alvarosiles/browser-tools/tree/dev) (código fuente completo)
-- **Rama `main`:** solo este README
-- **Rama `gh-pages`:** build de producción publicado (generado automáticamente, no se edita a mano)
+## ✨ Características
 
-## Arquitectura
+### 🌐 Soporte Multi-Navegador
+- Google Chrome, Microsoft Edge, Mozilla Firefox
+- Brave Browser, Opera, Vivaldi
+- LibreWolf, Zen Browser, GNOME Web
 
-```
-Navegador (React)  →  fetch HTTP  →  local-agent (Node/Express en la PC del usuario)  →  comandos de Windows
-```
+### 🛡️ Dominios Protegidos
+- Lista editable de dominios protegidos
+- Importar/exportar listas
+- Soporte para wildcards: `*.github.io`
+- Búsqueda/filtro rápido
+- Preconfigurado con: Google, GitHub, Claude/Anthropic
 
-Ningún botón ejecuta nada directamente desde el navegador. Cada acción llama a una función centralizada en `src/lib/localAgent.js`, que hace una petición HTTP al **servicio local** corriendo en `http://localhost:5177` (acciones) y `http://localhost:5178` (control start/stop). Sin ese servicio corriendo, la web muestra un aviso y ofrece el instalador para descargar.
+### 🧹 Limpieza Inteligente
+- **Borrar TODO excepto dominios protegidos**
+- **Borrar un dominio específico** en todos los navegadores
+- Historial, Cookies, Cache, LocalStorage, IndexedDB, etc.
 
-El servicio local se empaqueta como un único `.exe` autocontenido (Node SEA, sin necesitar Node.js instalado) que se instala con un doble clic, se copia a `%LOCALAPPDATA%\BrowserToolsAgent\` y se registra para arrancar solo con Windows.
+### 💾 Respaldos
+- Crear backups timestamped: `BrowserBackup/Chrome/2026-08-18_23-30-15/`
+- Seleccionar qué respaldar (Historia, Cookies, Marcadores, etc.)
+- Seguro - sin contraseñas en texto plano
 
-## Qué incluye el panel
+### 📋 Registro de Actividad
+- Log completo con timestamps
+- Sin información sensible
 
-**Personalización**
-- Tema oscuro/claro (persistente)
-- Idioma español/inglés (persistente)
+### 🔒 Seguridad
+- ✅ Todo local - sin envío de datos
+- ✅ Confirmación antes de borrar
+- ✅ Protección real de dominios
+- ✅ Detección de navegadores abiertos
 
-**Borrar Historial de Navegadores**
-- Chrome, Edge, Firefox, Brave, Opera
-- Selección por navegador × tipo de dato: cookies, caché, localStorage, sessionStorage, IndexedDB, Service Workers, historial, y avanzados (permisos, push, WebSQL, autocompletado, etc.)
-
-**Borrar Datos de un Dominio**
-- Borra cookies/historial/permisos de un solo dominio en todos los navegadores instalados, sin tocar el resto
-
-**Respaldo de Navegadores**
-- Respaldar perfil completo, favoritos o exportar contraseñas, por navegador
-- "Respaldar Todo" con progreso en tiempo real (job en background)
-
-**Control de Windows**
-- Reloj en vivo
-- Abrir: Panel de Control, Configuración, Administrador de Tareas, CMD como Administrador (UAC), PowerShell, Servicios (`services.msc`), Administrador de Dispositivos
-
-**Control de Impresión**
-- Tabla con impresoras instaladas (carga automática): estado, trabajos pendientes
-- Por impresora: imprimir prueba, eliminar trabajos atascados, marcar predeterminada, abrir mantenimiento
-- Generales: reiniciar cola, reiniciar servicio Spooler
-
-**Estado de Red**
-- IP local, interfaces de red, Wi-Fi conectada
-- Redes Wi-Fi guardadas con sus contraseñas (ocultables/revelables)
-
-**Información del PC**
-- Carga automática: nombre de equipo, usuario, versión de Windows, RAM, CPU, disco libre, IP local/pública, dominio, número de serie
-- Botón para copiar toda la información
-
-**Accesos Rápidos**
-- Carpetas: Descargas, Temp, `%appdata%`, Startup
-- Apps de soporte remoto: TeamViewer, AnyDesk (detecta instalación y las abre)
-
-**Reparaciones Automáticas**
-- SFC `/scannow`, DISM, CHKDSK, Flush DNS, Reset Winsock — individuales o "Ejecutar Todo" en un clic
-- Detecta si el servicio no corre como Administrador y avisa antes de fallar
-
-## Desarrollo local
-
-Necesitás dos procesos corriendo a la vez (o el script combinado):
+## 🚀 Instalación
 
 ```bash
 npm install
-cd local-agent && npm install && cd ..
-
-npm run web   # levanta local-agent + Vite juntos
+npm start
 ```
 
-Abrí la URL que muestra Vite (por defecto `http://localhost:5173`).
+## 📖 Cómo Usar
 
-## Build y despliegue
+**🛡️ Dominios Protegidos**: Configura qué dominios NO quieres que se limpien
+**🌐 Navegadores**: Limpia todos los datos excepto dominios protegidos
+**🧹 Borrar Dominio**: Elimina datos de UN sitio en todos los navegadores
+**📋 Actividad**: Visualiza el log de operaciones
 
-```bash
-node scripts/build-agent-exe.js   # compila local-agent a .exe y lo copia a public/downloads/
-npm run deploy                    # build de la web + publica dist/ en la rama gh-pages
+## 🔐 Protección de Dominios
+
+Los dominios protegidos funcionan como una **allowlist verdadera**:
+
+```
+Si proteges: github.com, mail.google.com, claude.ai
+
+Al presionar "Borrar Datos":
+✓ Se borra: historial de otros sitios, cookies de otros sitios
+✓ Se PROTEGE: todo de github.com, mail.google.com, claude.ai
 ```
 
-## Estructura del código (rama `dev`)
-
-```
-src/
-  components/       # un componente por panel, todos envueltos en Card.jsx
-  lib/
-    localAgent.js    # único punto de integración HTTP con el servicio local
-    i18n.jsx          # contexto de idioma (es/en)
-    theme.jsx         # contexto de tema (oscuro/claro)
-    translations.js   # diccionario de strings
-  App.jsx / main.jsx / index.css
-local-agent/
-  server.js          # rutas Express, expone las acciones por HTTP
-  commands.js         # implementación real de cada acción sobre Windows
-  build-exe.js        # empaqueta todo en un único .exe (esbuild + Node SEA)
-```
+¡Tus sesiones de GitHub y Google seguirán activas!
