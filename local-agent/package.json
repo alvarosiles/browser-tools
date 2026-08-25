@@ -1,7 +1,7 @@
 {
   "name": "it-support-tools-local-agent",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Servicio local (Windows) que ejecuta las acciones reales solicitadas por el panel web IT Support Tools.",
   "scripts": {
