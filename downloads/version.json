@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "windows": "https://alvarosiles.github.io/browser-tools/downloads/BrowserToolsAgent.exe",
   "linux": "https://alvarosiles.github.io/browser-tools/downloads/browser-tools-agent"
 }
