@@ -1,5 +1,10 @@
 <!-- PUEDES crear INFO.md para ahi que pongas todas la versines y lenguaje que necesita el proyecto -->
 
+Tu Me Estás Volviendo Loco, Juan Carlos Coronel - Audio
+http://localhost:5173
+
+https://alvarosiles.github.io/browser-tools/
+
 # INFO — Requisitos del proyecto
 
 ## Lenguajes y runtime
