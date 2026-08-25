@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>IT Support Tools — Admin</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #020617;
+    --panel: #0f172a;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-text: #eff6ff;
+    --code-bg: #020617;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 2.5rem 1.25rem;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 2rem;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  section h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.25rem;
+  }
+  section p.desc {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0 0 1rem;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+  code.cmd {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  button.copy {
+    flex-shrink: 0;
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button.copy:hover { background: #2563eb; }
+  button.copy.copied { background: #16a34a; }
+  a.file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #60a5fa;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-right: 1rem;
+  }
+  a.file:hover { text-decoration: underline; }
+  .files { margin-top: 0.5rem; }
+  footer {
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>IT Support Tools — Instaladores</h1>
+  <p class="subtitle">Panel interno con los comandos y archivos de instalación del agente local.</p>
+
+  <section>
+    <h2>Windows</h2>
+    <p class="desc">PowerShell — instala y registra el servicio automáticamente.</p>
+    <div class="row">
+      <code class="cmd" id="cmd-win">irm https://alvarosiles.github.io/browser-tools/downloads/install.ps1 | iex</code>
+      <button class="copy" data-target="cmd-win">Copiar</button>
+    </div>
+    <div class="files">
+      <a class="file" href="../downloads/BrowserToolsAgent.exe" download>⬇ BrowserToolsAgent.exe</a>
+      <a class="file" href="../downloads/install.ps1" download>⬇ install.ps1</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Linux</h2>
+    <p class="desc">Bash — descarga Node.js, instala dependencias y registra un servicio systemd de usuario.</p>
+    <div class="row">
+      <code class="cmd" id="cmd-linux">curl -fsSL https://alvarosiles.github.io/browser-tools/downloads/install.sh | bash</code>
+      <button class="copy" data-target="cmd-linux">Copiar</button>
+    </div>
+    <div class="files">
+      <a class="file" href="../downloads/install.sh" download>⬇ install.sh</a>
+      <a class="file" href="../downloads/install-linux.sh" download>⬇ install-linux.sh</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Otros archivos publicados</h2>
+    <p class="desc">Fuente del agente (usada por install-linux.sh) y metadata de versión.</p>
+    <div class="files">
+      <a class="file" href="../downloads/agent/server.js" download>⬇ agent/server.js</a>
+      <a class="file" href="../downloads/agent/commands.js" download>⬇ agent/commands.js</a>
+      <a class="file" href="../downloads/agent/updater.js" download>⬇ agent/updater.js</a>
+      <a class="file" href="../downloads/agent/package.json" download>⬇ agent/package.json</a>
+      <a class="file" href="../downloads/version.json" download>⬇ version.json</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Esta PC</h2>
+    <p class="desc">Herramientas sobre el agente que corre en esta misma máquina.</p>
+    <a class="file" href="../agent-status/">📊 Ver estado del agente</a>
+    <a class="file" href="../agent-update/">⬆ Actualizar agente</a>
+    <a class="file" href="../agent-uninstall/">🗑 Desinstalar agente</a>
+  </section>
+
+  <footer>alvarosiles.github.io/browser-tools</footer>
+</main>
+
+<script>
+  document.querySelectorAll('button.copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const text = document.getElementById(btn.dataset.target).textContent
+      try {
+        await navigator.clipboard.writeText(text)
+        btn.textContent = 'Copiado'
+        btn.classList.add('copied')
+        setTimeout(() => {
+          btn.textContent = 'Copiar'
+          btn.classList.remove('copied')
+        }, 1600)
+      } catch {}
+    })
+  })
+</script>
+</body>
+</html>

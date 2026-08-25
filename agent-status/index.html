@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>IT Support Tools — Estado del agente</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #020617;
+    --panel: #0f172a;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --ok: #22c55e;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 2.5rem 1.25rem;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.25rem; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0 0 2rem; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+  .badge.ok { color: var(--ok); background: rgba(34,197,94,0.12); }
+  .badge.bad { color: var(--bad); background: rgba(239,68,68,0.12); }
+  .badge .dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: currentColor; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  td { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+  td:first-child { color: var(--muted); width: 40%; }
+  td:last-child { text-align: right; word-break: break-word; }
+  tr:last-child td { border-bottom: none; }
+  button.refresh {
+    background: #1e293b;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  button.refresh:hover { background: #273449; }
+  a.back { color: #60a5fa; text-decoration: none; font-size: 0.85rem; }
+  a.back:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Estado del agente local</h1>
+  <p class="subtitle">Consulta directa a http://localhost — solo funciona si el agente corre en esta misma PC.</p>
+
+  <section>
+    <div id="badge" class="badge bad"><span class="dot"></span> Consultando...</div>
+    <table id="table"></table>
+  </section>
+
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <a class="back" href="../admin/">← Instaladores</a>
+    <button class="refresh" onclick="load()">Actualizar</button>
+  </div>
+</main>
+
+<script>
+  const WORKER = 'http://localhost:5177'
+  const CONTROL = 'http://localhost:5178'
+
+  function row(label, value) {
+    return `<tr><td>${label}</td><td>${value ?? '—'}</td></tr>`
+  }
+
+  async function load() {
+    const badge = document.getElementById('badge')
+    const table = document.getElementById('table')
+    badge.className = 'badge bad'
+    badge.innerHTML = '<span class="dot"></span> Consultando...'
+    table.innerHTML = ''
+
+    const rows = []
+    let healthy = false
+    let controlStatus = null
+
+    try {
+      const res = await fetch(`${WORKER}/health`, { signal: AbortSignal.timeout(2500) })
+      healthy = res.ok
+    } catch {}
+
+    try {
+      const res = await fetch(`${CONTROL}/status`, { signal: AbortSignal.timeout(2500) })
+      if (res.ok) controlStatus = await res.json()
+    } catch {}
+
+    if (!healthy && !controlStatus) {
+      badge.className = 'badge bad'
+      badge.innerHTML = '<span class="dot"></span> No detectado'
+      table.innerHTML = row('Estado', 'El agente no responde en esta PC (ni :5177 ni :5178).')
+      return
+    }
+
+    if (healthy) {
+      badge.className = 'badge ok'
+      badge.innerHTML = '<span class="dot"></span> Activo'
+    } else {
+      badge.className = 'badge bad'
+      badge.innerHTML = '<span class="dot"></span> Instalado, pero pausado'
+    }
+
+    rows.push(row('Servicio (5177)', healthy ? 'Respondiendo' : 'No responde'))
+    rows.push(row('Panel de control (5178)', controlStatus ? 'Respondiendo' : 'No responde'))
+    if (controlStatus) rows.push(row('Corriendo (worker)', controlStatus.running ? 'Sí' : 'No, pausado'))
+
+    if (healthy) {
+      try {
+        const res = await fetch(`${WORKER}/version`, { signal: AbortSignal.timeout(2500) })
+        if (res.ok) {
+          const data = await res.json()
+          rows.push(row('Versión', data.version))
+        }
+      } catch {}
+
+      try {
+        const res = await fetch(`${WORKER}/system-info`, { signal: AbortSignal.timeout(4000) })
+        if (res.ok) {
+          const { result } = await res.json()
+          rows.push(row('Equipo', result.computerName))
+          rows.push(row('Usuario', result.userName))
+          rows.push(row('Sistema', result.windowsVersion))
+          rows.push(row('IP Local', result.localIp))
+        }
+      } catch {}
+    }
+
+    table.innerHTML = rows.join('')
+  }
+
+  load()
+</script>
+</body>
+</html>
