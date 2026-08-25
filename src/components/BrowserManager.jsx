@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   History,
-  Save,
   Star,
   Upload,
   FolderOpen,
@@ -21,7 +20,6 @@ import {
   Sparkles,
   Eraser,
   AlertTriangle,
-  Trash2,
 } from 'lucide-react'
 import Card from './Card'
 import {
@@ -79,15 +77,14 @@ export default function BrowserManager({ onNotify }) {
   const { t } = useLanguage()
   const [installed, setInstalled] = useState({})
   const [selection, setSelection] = useState(emptySelection)
-  const [processingDelete, setProcessingDelete] = useState(false)
-  const [processingBackup, setProcessingBackup] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [processingStage, setProcessingStage] = useState(null) // 'delete' | 'reset' | 'backup' | null
   const [showDeleteDetailed, setShowDeleteDetailed] = useState(false)
   const [showBackupDetailed, setShowBackupDetailed] = useState(false)
   const [backupResults, setBackupResults] = useState(null)
-  const [domain, setDomain] = useState('')
+  const [domain, setDomain] = useState('https://metabet.tv/')
   const [processingDomain, setProcessingDomain] = useState(false)
   const [resetSelection, setResetSelection] = useState(() => Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
-  const [processingReset, setProcessingReset] = useState(false)
   const deletePollRef = useRef(null)
   const resetPollRef = useRef(null)
   const backupPollRef = useRef(null)
@@ -133,7 +130,9 @@ export default function BrowserManager({ onNotify }) {
 
   const toggleRowBothGroups = (browserId) => {
     const allChecked =
-      isRowFullyChecked(browserId, 'del', DELETE_TYPES) && isRowFullyChecked(browserId, 'backup', BACKUP_TYPES)
+      isRowFullyChecked(browserId, 'del', DELETE_TYPES) &&
+      isRowFullyChecked(browserId, 'backup', BACKUP_TYPES) &&
+      resetSelection[browserId]
     setSelection((prev) => ({
       ...prev,
       [browserId]: {
@@ -141,10 +140,18 @@ export default function BrowserManager({ onNotify }) {
         backup: Object.fromEntries(BACKUP_TYPES.map((k) => [k, !allChecked])),
       },
     }))
+    setResetSelection((prev) => ({ ...prev, [browserId]: !allChecked }))
   }
 
   const selectedDeleteCount = Object.values(selection).filter((row) => Object.values(row.del).some(Boolean)).length
   const selectedBackupCount = Object.values(selection).filter((row) => Object.values(row.backup).some(Boolean)).length
+
+  const isResetColumnFullyChecked = () => BROWSERS.every((b) => resetSelection[b.id])
+
+  const toggleAllReset = () => {
+    const allChecked = isResetColumnFullyChecked()
+    setResetSelection(Object.fromEntries(BROWSERS.map((b) => [b.id, !allChecked])))
+  }
 
   const isColumnFullyChecked = (group, keys) => BROWSERS.every((b) => isRowFullyChecked(b.id, group, keys))
 
@@ -159,63 +166,58 @@ export default function BrowserManager({ onNotify }) {
     })
   }
 
-  // Corre como job en el servidor (ver local-agent/server.js): si el navegador que
+  // Cada job corre en el servidor (ver local-agent/server.js): si el navegador que
   // cerramos es el mismo que aloja este panel, la pestaña muere a mitad de la cola si
-  // esto se hiciera con un for/await acá — el servidor sigue procesando el resto
-  // independientemente de que el cliente que lo pidió siga vivo o no.
-  const handleProcessDelete = async () => {
+  // esto se hiciera con un for/await puramente en el cliente — el servidor sigue
+  // procesando el resto independientemente de que el cliente que lo pidió siga vivo o no.
+  // pollUntilDone solo espera a que ESE job puntual termine antes de resolver.
+  const pollUntilDone = (getStatus, pollRef) =>
+    new Promise((resolve, reject) => {
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await getStatus()
+          if (status.status !== 'running') {
+            clearInterval(pollRef.current)
+            resolve(status)
+          }
+        } catch (err) {
+          clearInterval(pollRef.current)
+          reject(err)
+        }
+      }, 1500)
+    })
+
+  const runDelete = async () => {
     const items = BROWSERS.map((browser) => ({
       browserId: browser.id,
       types: DELETE_TYPES.filter((key) => selection[browser.id].del[key]),
     })).filter((item) => item.types.length > 0)
     if (items.length === 0) return
 
-    setProcessingDelete(true)
     setSelection((prev) => {
       const next = { ...prev }
       for (const b of BROWSERS) next[b.id] = { ...next[b.id], del: emptyGroup(DELETE_TYPES) }
       return next
     })
 
-    try {
-      const jobId = await startClearBrowsersData(items)
-      deletePollRef.current = setInterval(async () => {
-        try {
-          const status = await getClearBrowsersDataStatus(jobId)
-          if (status.status !== 'running') {
-            clearInterval(deletePollRef.current)
-            setProcessingDelete(false)
-            for (const step of status.steps) {
-              if (step.status === 'success') onNotify(t('browserCleaner.clearedNotify', { name: step.label }))
-              else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
-            }
-            if (status.status === 'error') onNotify(status.error)
-          }
-        } catch (err) {
-          clearInterval(deletePollRef.current)
-          setProcessingDelete(false)
-          onNotify(err.message)
-        }
-      }, 1500)
-    } catch (err) {
-      setProcessingDelete(false)
-      onNotify(err.message)
+    const jobId = await startClearBrowsersData(items)
+    const status = await pollUntilDone(() => getClearBrowsersDataStatus(jobId), deletePollRef)
+    for (const step of status.steps) {
+      if (step.status === 'success') onNotify(t('browserCleaner.clearedNotify', { name: step.label }))
+      else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
     }
+    if (status.status === 'error') onNotify(status.error)
   }
 
   const stepLabel = (browserName, kind) =>
     `${browserName}: ${t(kind === 'profile' ? 'browserBackup.backupProfile' : kind === 'bookmarks' ? 'browserBackup.backupBookmarks' : 'browserBackup.exportPasswords')}`
 
-  // Job en el servidor por el mismo motivo que borrado/reset: backupBrowserProfile cierra
-  // el navegador, y si es el que aloja este panel, una cola secuencial hecha acá se corta
-  // ahí mismo.
-  const handleProcessBackup = async () => {
+  const runBackup = async () => {
     const items = BROWSERS.map((browser) => ({ browserId: browser.id, ...selection[browser.id].backup })).filter(
       (item) => item.profile || item.bookmarks || item.passwords
     )
     if (items.length === 0) return
 
-    setProcessingBackup(true)
     setBackupResults(null)
     setSelection((prev) => {
       const next = { ...prev }
@@ -223,37 +225,20 @@ export default function BrowserManager({ onNotify }) {
       return next
     })
 
-    try {
-      const jobId = await startBackupSelected(items)
-      backupPollRef.current = setInterval(async () => {
-        try {
-          const status = await getBackupSelectedStatus(jobId)
-          if (status.status !== 'running') {
-            clearInterval(backupPollRef.current)
-            setProcessingBackup(false)
-            const browserNames = Object.fromEntries(BROWSERS.map((b) => [b.id, b.name]))
-            setBackupResults(
-              status.steps.map((step) => ({
-                id: step.id,
-                label: stepLabel(browserNames[step.browserId] || step.browserId, step.kind),
-                status: step.status,
-                sizeBytes: step.sizeBytes,
-                error: step.error,
-              }))
-            )
-            if (status.status === 'done') onNotify(t('browserBackup.completed'))
-            else if (status.status === 'error') onNotify(status.error)
-          }
-        } catch (err) {
-          clearInterval(backupPollRef.current)
-          setProcessingBackup(false)
-          onNotify(err.message)
-        }
-      }, 1500)
-    } catch (err) {
-      setProcessingBackup(false)
-      onNotify(err.message)
-    }
+    const jobId = await startBackupSelected(items)
+    const status = await pollUntilDone(() => getBackupSelectedStatus(jobId), backupPollRef)
+    const browserNames = Object.fromEntries(BROWSERS.map((b) => [b.id, b.name]))
+    setBackupResults(
+      status.steps.map((step) => ({
+        id: step.id,
+        label: stepLabel(browserNames[step.browserId] || step.browserId, step.kind),
+        status: step.status,
+        sizeBytes: step.sizeBytes,
+        error: step.error,
+      }))
+    )
+    if (status.status === 'done') onNotify(t('browserBackup.completed'))
+    else if (status.status === 'error') onNotify(status.error)
   }
 
   const handleSubmitDomain = async (e) => {
@@ -274,7 +259,7 @@ export default function BrowserManager({ onNotify }) {
             })
           : t('domainCleaner.notFoundNotify', { domain: cleanDomain })
       )
-      setDomain('')
+      setDomain('https://metabet.tv/')
     } catch (err) {
       onNotify(err.message)
     } finally {
@@ -288,7 +273,7 @@ export default function BrowserManager({ onNotify }) {
     setResetSelection((prev) => ({ ...prev, [browserId]: !prev[browserId] }))
   }
 
-  const handleProcessReset = async () => {
+  const runReset = async () => {
     const targets = BROWSERS.filter((b) => resetSelection[b.id])
     if (targets.length === 0) return
     if (
@@ -299,33 +284,15 @@ export default function BrowserManager({ onNotify }) {
       return
     }
 
-    setProcessingReset(true)
     setResetSelection(Object.fromEntries(BROWSERS.map((b) => [b.id, false])))
 
-    try {
-      const jobId = await startResetBrowserProfiles(targets.map((b) => b.id))
-      resetPollRef.current = setInterval(async () => {
-        try {
-          const status = await getResetBrowserProfilesStatus(jobId)
-          if (status.status !== 'running') {
-            clearInterval(resetPollRef.current)
-            setProcessingReset(false)
-            for (const step of status.steps) {
-              if (step.status === 'success') onNotify(t('browserReset.doneNotify', { name: step.label }))
-              else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
-            }
-            if (status.status === 'error') onNotify(status.error)
-          }
-        } catch (err) {
-          clearInterval(resetPollRef.current)
-          setProcessingReset(false)
-          onNotify(err.message)
-        }
-      }, 1500)
-    } catch (err) {
-      setProcessingReset(false)
-      onNotify(err.message)
+    const jobId = await startResetBrowserProfiles(targets.map((b) => b.id))
+    const status = await pollUntilDone(() => getResetBrowserProfilesStatus(jobId), resetPollRef)
+    for (const step of status.steps) {
+      if (step.status === 'success') onNotify(t('browserReset.doneNotify', { name: step.label }))
+      else if (step.status === 'error') onNotify(`${step.label}: ${step.error}`)
     }
+    if (status.status === 'error') onNotify(status.error)
   }
 
   const handleOpenFolder = async () => {
@@ -337,7 +304,32 @@ export default function BrowserManager({ onNotify }) {
     }
   }
 
-  const processing = processingDelete || processingBackup
+  // Orden fijo: primero se borra data, después el reset completo de perfil, y
+  // por último el respaldo — cada paso solo corre si esa columna tenía algo tildado.
+  const handleProcessAll = async () => {
+    if (selectedDeleteCount === 0 && selectedResetCount === 0 && selectedBackupCount === 0) return
+
+    setProcessing(true)
+    try {
+      if (selectedDeleteCount > 0) {
+        setProcessingStage('delete')
+        await runDelete()
+      }
+      if (selectedResetCount > 0) {
+        setProcessingStage('reset')
+        await runReset()
+      }
+      if (selectedBackupCount > 0) {
+        setProcessingStage('backup')
+        await runBackup()
+      }
+    } catch (err) {
+      onNotify(err.message)
+    } finally {
+      setProcessing(false)
+      setProcessingStage(null)
+    }
+  }
 
   return (
     <Card icon={History} title={t('browserManager.title')} description={t('browserManager.description')}>
@@ -348,6 +340,15 @@ export default function BrowserManager({ onNotify }) {
               <th rowSpan={2} className="whitespace-nowrap px-4 py-2.5 align-bottom font-medium">
                 {t('browserCleaner.browser')}
               </th>
+              <th
+                className="whitespace-nowrap border-l border-red-200 px-3 py-1.5 text-center font-semibold text-red-700 dark:border-red-900/40 dark:text-red-400"
+                title={t('browserReset.description')}
+              >
+                <span className="inline-flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {t('browserReset.title')}
+                </span>
+              </th>
               <th colSpan={showDeleteDetailed ? DELETE_TYPES.length : 1} className="whitespace-nowrap border-l border-slate-200 px-3 py-1.5 text-center font-semibold dark:border-slate-800">
                 {t('browserCleaner.title')}
               </th>
@@ -356,6 +357,16 @@ export default function BrowserManager({ onNotify }) {
               </th>
             </tr>
             <tr className="border-b border-slate-200 bg-slate-100/70 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-950/50">
+              <th className="whitespace-nowrap border-l border-red-200 px-3 py-2 text-center font-medium dark:border-red-900/40">
+                <input
+                  type="checkbox"
+                  checked={isResetColumnFullyChecked()}
+                  onChange={toggleAllReset}
+                  disabled={processing}
+                  title={t('browserCleaner.toggleAllTitle', { name: t('browserReset.title') })}
+                  className="h-4 w-4 cursor-pointer accent-red-700 disabled:cursor-not-allowed disabled:opacity-30"
+                />
+              </th>
               {showDeleteDetailed ? (
                 DELETE_TYPES.map((key, i) => (
                   <th key={key} className={`whitespace-nowrap px-3 py-2 text-center font-medium ${i === 0 ? 'border-l border-slate-200 dark:border-slate-800' : ''}`}>
@@ -466,6 +477,17 @@ export default function BrowserManager({ onNotify }) {
                     </button>
                   </td>
 
+                  {/* Reset completo */}
+                  <td className="border-l border-red-200 px-3 py-2.5 text-center dark:border-red-900/40">
+                    <input
+                      type="checkbox"
+                      checked={resetSelection[browser.id]}
+                      onChange={() => toggleReset(browser.id)}
+                      disabled={processing}
+                      className="h-4 w-4 cursor-pointer accent-red-700 disabled:cursor-not-allowed disabled:opacity-30"
+                    />
+                  </td>
+
                   {/* Borrar */}
                   {showDeleteDetailed ? (
                     DELETE_TYPES.map((key, i) => (
@@ -526,21 +548,22 @@ export default function BrowserManager({ onNotify }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={handleProcessDelete}
-          disabled={selectedDeleteCount === 0 || processing}
-          className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 active:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
+          onClick={handleProcessAll}
+          disabled={(selectedDeleteCount === 0 && selectedResetCount === 0 && selectedBackupCount === 0) || processing}
+          className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 active:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
         >
-          {processingDelete ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
-          {processingDelete ? t('browserCleaner.processing') : `${t('browserCleaner.process')}${selectedDeleteCount ? ` (${selectedDeleteCount})` : ''}`}
-        </button>
-
-        <button
-          onClick={handleProcessBackup}
-          disabled={selectedBackupCount === 0 || processing}
-          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
-        >
-          {processingBackup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {processingBackup ? t('browserBackup.creating') : `${t('browserCleaner.process')}${selectedBackupCount ? ` (${selectedBackupCount})` : ''}`}
+          {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+          {processing
+            ? {
+                delete: t('browserCleaner.processing'),
+                reset: t('browserReset.processing'),
+                backup: t('browserBackup.creating'),
+              }[processingStage]
+            : `${t('browserCleaner.process')}${
+                selectedDeleteCount + selectedResetCount + selectedBackupCount
+                  ? ` (${selectedDeleteCount + selectedResetCount + selectedBackupCount})`
+                  : ''
+              }`}
         </button>
       </div>
 
@@ -594,44 +617,6 @@ export default function BrowserManager({ onNotify }) {
             {processingDomain ? t('domainCleaner.submitting') : t('domainCleaner.submit')}
           </button>
         </form>
-      </div>
-
-      <div className="rounded-xl border border-red-300/60 bg-red-50 px-4 py-3.5 dark:border-red-900/50 dark:bg-red-950/20">
-        <div className="mb-1 flex items-center gap-1.5">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
-          <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">{t('browserReset.title')}</h3>
-        </div>
-        <p className="mb-2.5 text-xs text-red-700/80 dark:text-red-400/70">{t('browserReset.description')}</p>
-
-        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5">
-          {BROWSERS.map((browser) => (
-            <label
-              key={browser.id}
-              className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300"
-            >
-              <input
-                type="checkbox"
-                checked={resetSelection[browser.id]}
-                onChange={() => toggleReset(browser.id)}
-                disabled={processingReset}
-                className="h-4 w-4 cursor-pointer accent-red-600 disabled:cursor-not-allowed disabled:opacity-30"
-              />
-              <browser.icon className={`h-3.5 w-3.5 ${browser.color}`} />
-              {browser.name}
-            </label>
-          ))}
-        </div>
-
-        <button
-          onClick={handleProcessReset}
-          disabled={selectedResetCount === 0 || processingReset}
-          className="flex items-center justify-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 active:bg-red-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
-        >
-          {processingReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          {processingReset
-            ? t('browserReset.processing')
-            : `${t('browserReset.process')}${selectedResetCount ? ` (${selectedResetCount})` : ''}`}
-        </button>
       </div>
     </Card>
   )
